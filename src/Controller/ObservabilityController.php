@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Observability\ActivityStream;
+use App\Observability\ComponentProjection;
 use App\Observability\DashboardProjection;
 use App\Observability\ObservationFilter;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -42,10 +43,10 @@ final class ObservabilityController extends AbstractController
     }
 
     #[Route('/api/v1/observability/events', name: 'api_observability_events', methods: ['GET'])]
-    public function events(#[MapQueryString] ObservationFilter $filter, Request $request, DashboardProjection $projection, ActivityStream $stream): EventStreamResponse
+    public function events(#[MapQueryString] ObservationFilter $filter, Request $request, ComponentProjection $projection, ActivityStream $stream): EventStreamResponse
     {
         // Validate selections before sending stream headers; the stream reads again after LISTEN.
-        $projection->snapshot($filter);
+        $projection->context($filter);
         // Release the form-login session before streaming so refresh requests can run concurrently.
         if ($request->hasSession() && $request->getSession()->isStarted()) {
             $request->getSession()->save();

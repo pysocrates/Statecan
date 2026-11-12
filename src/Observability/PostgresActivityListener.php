@@ -30,19 +30,42 @@ final readonly class PostgresActivityListener
 
     public function wait(Connection $listener, int $timeoutMilliseconds): bool
     {
+        return null !== $this->changes($listener, $timeoutMilliseconds);
+    }
+
+    /** null means timeout; batches cap memory and reconcile if notifications overflow. */
+    public function changes(Connection $listener, int $timeoutMilliseconds): ?array
+    {
         $pdo = $listener->getNativeConnection();
         if (!$pdo instanceof \Pdo\Pgsql) {
             throw new \LogicException('Dashboard notifications require the pdo_pgsql driver.');
         }
-
-        if (false === $pdo->getNotify(\PDO::FETCH_ASSOC, $timeoutMilliseconds)) {
-            return false;
+        $notification = $pdo->getNotify(\PDO::FETCH_ASSOC, $timeoutMilliseconds);
+        if (false === $notification) {
+            return null;
         }
+        $changes = [];
+        $overflow = false;
+        $count = 0;
+        do {
+            if (++$count <= 128) {
+                try {
+                    $change = json_decode($notification['payload'], true, 16, JSON_THROW_ON_ERROR);
+                    $changes[] = is_array($change) ? $change : [];
+                } catch (\JsonException) {
+                    $changes[] = [];
+                }
+            } else {
+                $overflow = true;
+            }
+            // Bound draining even under continuous writes; remaining notifications
+            // will be coalesced by the next iteration after reconciliation.
+            if ($count >= 512) {
+                $overflow = true;
+                break;
+            }
+        } while (false !== ($notification = $pdo->getNotify(\PDO::FETCH_ASSOC, 0)));
 
-        // One authoritative refresh covers all changes already queued on this connection.
-        while (false !== $pdo->getNotify(\PDO::FETCH_ASSOC, 0)) {
-        }
-
-        return true;
+        return ['changes' => $changes, 'overflow' => $overflow];
     }
 }
