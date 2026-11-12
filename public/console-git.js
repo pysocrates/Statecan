@@ -29,7 +29,7 @@
         if (node.contains(focus)) {
             if (focus.id) selector = '#' + CSS.escape(focus.id);
             else if (focus.matches('summary')) selector = `[data-review-detail="${CSS.escape(focus.parentElement.dataset.reviewDetail || '')}"] > summary`;
-            else for (const key of ['data-graph-zoom', 'data-graph-fit', 'data-git-commit', 'data-review-refresh', 'data-review-page', 'data-git-close']) {
+            else for (const key of ['data-graph-zoom', 'data-graph-fit', 'data-graph-readable', 'data-graph-ref', 'data-graph-clear', 'data-git-commit', 'data-review-refresh', 'data-review-page', 'data-git-close']) {
                 if (focus.hasAttribute(key)) { selector = `[${key}="${CSS.escape(focus.getAttribute(key))}"]`; break; }
             }
         }
@@ -39,14 +39,18 @@
             values: [...node.querySelectorAll('[data-review-form] input,[data-review-form] select')].map(n => [n.name, n.value]),
             focus: selector,
             range: focus?.matches('input[type=search],input:not([type])') ? [focus.selectionStart, focus.selectionEnd] : null,
-            graph: node.querySelector('[data-git-graph]')?.getAttribute('viewBox')
+            graph: node.querySelector('[data-git-graph]')?.getAttribute('viewBox'),
+            trace: node.querySelector('[data-git-graph]')?.dataset.trace
         };
     }
     function restore(node, saved, live) {
         saved.open.forEach(key => { const detail = node.querySelector(`[data-review-detail="${CSS.escape(key)}"]`); if (detail) detail.open = true; });
         saved.scroll.forEach(([key, top, left]) => { const target = node.querySelector(`[data-review-scroll="${CSS.escape(key)}"]`); if (target) { target.scrollTop = top; target.scrollLeft = left; } });
         if (live) saved.values.forEach(([name, value]) => { const field = node.querySelector(`[data-review-form] [name="${CSS.escape(name)}"]`); if (field) field.value = value; });
-        if (live && saved.graph) node.querySelector('[data-git-graph]')?.setAttribute('viewBox', saved.graph);
+        const svg = node.querySelector('[data-git-graph]');
+        if (live && saved.graph) svg?.setAttribute('viewBox', saved.graph);
+        else if (svg) readable(svg);
+        if (live && saved.trace && svg) trace(svg, saved.trace);
         const focus = saved.focus && node.querySelector(saved.focus);
         if (focus && !focus.disabled) {
             focus.focus({preventScroll: true});
@@ -149,6 +153,35 @@
         } finally { section.removeAttribute('aria-busy'); }
     }
     function viewBox(svg) { return svg.getAttribute('viewBox').split(/\s+/).map(Number); }
+    function readable(svg, target = null) {
+        const area = svg.closest('.git-graph-viewport');
+        const width = Math.max(280, area.clientWidth);
+        const height = Math.max(280, area.clientHeight);
+        const x = target ? Number(target.dataset.graphX) - width / 2 : (Number(svg.dataset.graphWidth) - width) / 2;
+        const y = target ? Math.max(0, Number(target.dataset.graphY) - height / 2) : 0;
+        svg.setAttribute('viewBox', [x, y, width, height].join(' '));
+    }
+    function trace(svg, sha) {
+        const nodes = [...svg.querySelectorAll('[data-git-commit]')];
+        const edges = [...svg.querySelectorAll('[data-graph-edge]')];
+        const active = new Set(sha ? [sha] : []);
+        const queue = [...active];
+        while (queue.length) {
+            const child = queue.shift();
+            edges.filter(edge => edge.dataset.to === child).forEach(edge => {
+                if (!active.has(edge.dataset.from)) { active.add(edge.dataset.from); queue.push(edge.dataset.from); }
+            });
+        }
+        if (sha) svg.dataset.trace = sha;
+        else delete svg.dataset.trace;
+        nodes.forEach(node => node.classList.toggle('is-traced', active.has(node.dataset.gitCommit)));
+        edges.forEach(edge => edge.classList.toggle('is-traced', active.has(edge.dataset.from) && active.has(edge.dataset.to)));
+        const root = svg.closest('.git-graph-panel');
+        root.querySelectorAll('[data-graph-ref]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.graphRef === sha)));
+        root.querySelector('[data-graph-trace-status]').textContent = sha
+            ? `Tracing ${sha.slice(0, 12)} and its recorded ancestors. Dashed links contain collapsed commits.`
+            : 'Trace cleared. All displayed ancestry is visible; dashed links contain collapsed commits.';
+    }
     function zoom(svg, factor) {
         const [x, y, width, height] = viewBox(svg);
         const next = Math.max(80, Math.min(Number(svg.dataset.graphWidth) * 8, width * factor));
@@ -182,9 +215,17 @@
         const svg = node.querySelector('[data-git-graph]');
         const zoomButton = event.target.closest('[data-graph-zoom]');
         if (zoomButton && svg) zoom(svg, zoomButton.dataset.graphZoom === 'in' ? .8 : 1.25);
+        const ref = event.target.closest('[data-graph-ref]');
+        if (ref && svg && !ref.disabled) {
+            const target = svg.querySelector(`[data-git-commit="${CSS.escape(ref.dataset.graphRef)}"]`);
+            trace(svg, ref.dataset.graphRef);
+            if (target) readable(svg, target);
+        }
+        if (event.target.closest('[data-graph-clear]') && svg) trace(svg, null);
+        if (event.target.closest('[data-graph-readable]') && svg) readable(svg);
         if (event.target.closest('[data-graph-fit]') && svg) svg.setAttribute('viewBox', `0 0 ${svg.dataset.graphWidth} ${svg.dataset.graphHeight}`);
         const commit = event.target.closest('[data-git-commit]');
-        if (commit && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); if (!stateFor('git', node).dragged) loadCommit(node, commit.dataset.gitCommit); }
+        if (commit && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); if (!stateFor('git', node).dragged) { trace(svg, commit.dataset.gitCommit); loadCommit(node, commit.dataset.gitCommit); } }
         if (event.target.closest('[data-git-close]')) {
             const state = stateFor('git', node);
             const source = state.selected && node.querySelector(`[data-git-commit="${CSS.escape(state.selected)}"]`);

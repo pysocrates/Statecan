@@ -204,7 +204,7 @@ JS);
         $browser->getWebDriver()->findElement(WebDriverBy::cssSelector('[data-graph-zoom="in"]'))->click();
         self::assertNotSame($initialBox, $browser->executeScript('return document.querySelector("[data-git-graph]").getAttribute("viewBox")'));
         $browser->getWebDriver()->findElement(WebDriverBy::cssSelector('[data-graph-fit]'))->click();
-        self::assertSame($initialBox, $browser->executeScript('return document.querySelector("[data-git-graph]").getAttribute("viewBox")'));
+        self::assertTrue($browser->executeScript('const s=document.querySelector("[data-git-graph]");return s.getAttribute("viewBox") === `0 0 ${s.dataset.graphWidth} ${s.dataset.graphHeight}`'));
         $browser->getWebDriver()->findElement(WebDriverBy::id('git-search'))->sendKeys('Fixture commit 31');
         $browser->getWebDriver()->findElement(WebDriverBy::cssSelector('#git-panel [data-review-form] button'))->click();
         $browser->getWebDriver()->wait(10)->until(fn (): bool => 1 === $browser->executeScript('return document.querySelectorAll(".git-timeline > li[data-entity-id]").length'));

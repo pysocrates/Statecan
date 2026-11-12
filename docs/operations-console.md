@@ -144,3 +144,23 @@ PHP modules must be enabled for both PHPUnit and Panther's child PHP server. Bro
 suites use concurrent PHP workers so SSE does not block other requests. Run parallel
 suites on distinct HTTP/ChromeDriver ports. Use `PANTHER_EXTERNAL_BASE_URI` only with
 an isolated test server configured for the test database.
+
+## Branch ancestry trees
+
+The Git graph grows top-to-bottom. Observed ref buttons locate branch tips and
+highlight their recorded ancestors; forks and merges use actual Git parent links.
+Ordinary stretches may collapse into dashed links labeled with the number of
+intermediate commits. The view keeps at most 50 commits from a bounded 500-commit
+metadata read, preferring ref tips, forks, merges and ancestry boundaries. Missing
+parents are marked as outside the current view. Filter by a ref to narrow a large
+history. Readable view restores legible node sizes; Fit graph shows the whole tree.
+Pan, zoom, selected commit details and live-update state retention remain available.
+
+This works with any registered repository after indexing: local branches, remote
+tracking refs and tags are discovered from Git, without agent names or paths in
+application configuration. Normal repository sync picks up new refs. A deployment
+must have access to those refs in its Git checkout; cloning the application from
+GitHub cannot expose private branches held only on another machine. Clone/fetch
+policy and repository registration remain deployment configuration. Branch labels
+are observations, not verified agent ownership. Existing self-reported task/session
+associations remain available in commit details with their confidence labels.

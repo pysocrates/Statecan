@@ -40,10 +40,12 @@ final class GitHistoryConsoleTest extends PantherTestCase
         $em->flush();
         $sha = str_repeat('a', 40);
         $parent = str_repeat('b', 40);
+        $fork = str_repeat('c', 40);
+        $other = str_repeat('d', 40);
         $at = gmdate('Y-m-d H:i:s');
-        $db->executeStatement('UPDATE git_repository SET refs = ?, observed_at = ? WHERE id = ?', [json_encode(['refs/heads/main' => $sha]), $at, $repository->getId()]);
-        foreach ([$sha, $parent] as $commit) {
-            $db->insert('git_event', ['id' => Uuid::v7()->toRfc4122(), 'repository_id' => $repository->getId(), 'event_key' => 'commit:'.$commit, 'kind' => 'commit', 'sha' => $commit, 'observed_at' => $at, 'metadata' => json_encode(['message' => $commit === $sha ? 'Trace indexed work' : 'Earlier indexed work', 'author' => 'Recorded author', 'parents' => $commit === $sha ? [$parent] : [], 'files' => ['src/Example.php']])]);
+        $db->executeStatement('UPDATE git_repository SET refs = ?, observed_at = ? WHERE id = ?', [json_encode(['refs/heads/main' => $sha, 'refs/heads/agents/alpha' => $parent, 'refs/heads/agents/beta' => $other]), $at, $repository->getId()]);
+        foreach ([$sha, $parent, $fork, $other] as $commit) {
+            $db->insert('git_event', ['id' => Uuid::v7()->toRfc4122(), 'repository_id' => $repository->getId(), 'event_key' => 'commit:'.$commit, 'kind' => 'commit', 'sha' => $commit, 'observed_at' => $at, 'metadata' => json_encode(['message' => $commit === $sha ? 'Trace indexed work' : 'Earlier indexed work', 'author' => 'Recorded author', 'parents' => $commit === $sha ? [$parent, $other] : ($commit === $fork ? [] : [$fork]), 'files' => ['src/Example.php']])]);
         }
         $client = null;
         try {
@@ -61,7 +63,15 @@ final class GitHistoryConsoleTest extends PantherTestCase
             $client->getWebDriver()->findElement(WebDriverBy::cssSelector('[data-graph-zoom="in"]'))->click();
             self::assertNotSame($box, $client->executeScript('return document.querySelector("[data-git-graph]").getAttribute("viewBox")'));
             $client->getWebDriver()->findElement(WebDriverBy::cssSelector('[data-graph-fit]'))->click();
-            self::assertSame($box, $client->executeScript('return document.querySelector("[data-git-graph]").getAttribute("viewBox")'));
+            self::assertTrue($client->executeScript('const s=document.querySelector("[data-git-graph]");return s.getAttribute("viewBox") === `0 0 ${s.dataset.graphWidth} ${s.dataset.graphHeight}`'));
+            $client->getWebDriver()->findElement(WebDriverBy::cssSelector('[data-graph-ref="'.$parent.'"]'))->click();
+            self::assertSame($parent, $client->executeScript('return document.querySelector("[data-git-graph]").dataset.trace'));
+            self::assertSame(2, $client->executeScript('return document.querySelectorAll("[data-git-graph] [data-git-commit].is-traced").length'));
+            self::assertSame(1, $client->executeScript('return document.querySelectorAll("[data-git-graph] [data-graph-edge].is-traced").length'));
+            self::assertStringContainsString('agents/alpha', $client->executeScript('return document.querySelector("[data-graph-ref][aria-pressed=true]").textContent'));
+            $client->getWebDriver()->findElement(WebDriverBy::cssSelector('[data-graph-clear]'))->click();
+            self::assertNull($client->executeScript('return document.querySelector("[data-git-graph]").getAttribute("data-trace")'));
+            $client->takeScreenshot('var/console-screenshots/branch-tree-desktop.png');
             (new WebDriverSelect($client->getWebDriver()->findElement(WebDriverBy::id('git-branch'))))->selectByValue('refs/heads/main');
             $client->getWebDriver()->findElement(WebDriverBy::id('git-search'))->sendKeys('Trace');
             $client->getWebDriver()->findElement(WebDriverBy::cssSelector('#git-panel [data-review-form] button'))->click();

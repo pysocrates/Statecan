@@ -13,7 +13,7 @@ final readonly class GitHistoryProjection
     public const PAGE_SIZE = 25;
     public const GRAPH_LIMIT = 50;
 
-    public function __construct(private Connection $db, private GraphPreview $graphs)
+    public function __construct(private Connection $db, private CommitTree $trees)
     {
     }
 
@@ -73,36 +73,11 @@ final readonly class GitHistoryProjection
             $event['associations'] = array_values(array_filter($associations, static fn (array $a): bool => $a['sha'] === $event['sha']));
         }
         unset($event);
-        $graphRows = null !== $commitSha ? [] : $this->db->fetchAllAssociative($prefix."SELECT e.sha, e.metadata->'parents' AS parents, left(e.metadata->>'message', 160) AS message FROM git_event e WHERE ".$condition." AND e.kind IN ('commit', 'merge') ORDER BY e.observed_at DESC, e.id DESC LIMIT 50", $parameters);
-        $nodes = [];
-        $lines = ['graph LR'];
-        foreach ($graphRows as $row) {
-            if (preg_match('/^[a-f0-9]{40,64}$/D', $row['sha'])) {
-                $nodes[$row['sha']] = $row;
-                $lines[] = 'c'.$row['sha'].'["'.substr($row['sha'], 0, 12).'"]';
-            }
-        }
-        foreach ($nodes as $sha => $row) {
-            foreach (json_decode($row['parents'] ?? '[]', true, flags: JSON_THROW_ON_ERROR) as $parent) {
-                if (isset($nodes[$parent])) {
-                    $lines[] = 'c'.$parent.' --> c'.$sha;
-                }
-            }
-        }
-        $mermaid = implode("\n", $lines);
-        $graph = $this->graphs->layout($mermaid);
-        // Fit small histories without enlarging a single commit into a full-width card.
-        $dx = max(0, (760 - $graph['width']) / 2);
-        $dy = max(0, (280 - $graph['height']) / 2);
-        foreach ($graph['nodes'] as &$node) {
-            $node['x'] += $dx;
-            $node['y'] += $dy;
-        }
-        unset($node);
-        $graph['width'] = max(760, $graph['width']);
-        $graph['height'] = max(280, $graph['height']);
+        // Read only bounded ancestry metadata; timeline pagination is independent.
+        $graphRows = null !== $commitSha ? [] : $this->db->fetchAllAssociative($prefix."SELECT e.sha, e.metadata->'parents' AS parents, left(e.metadata->>'message', 160) AS message FROM git_event e WHERE ".$condition." AND e.kind IN ('commit', 'merge') ORDER BY e.metadata->>'authoredAt' DESC NULLS LAST, e.observed_at DESC, e.id DESC LIMIT 500", $parameters);
+        $tree = $this->trees->build($graphRows, $repository['refs'] ?? [], self::GRAPH_LIMIT);
 
-        return ['project' => $project, 'repositories' => $repositories, 'repository' => $repository, 'events' => $events, 'graph' => $graph, 'mermaid' => $mermaid, 'page' => $filter->page, 'has_next' => $hasNext, 'page_size' => self::PAGE_SIZE, 'filter' => $filter, 'graph_limit' => self::GRAPH_LIMIT];
+        return ['project' => $project, 'repositories' => $repositories, 'repository' => $repository, 'events' => $events, ...$tree, 'page' => $filter->page, 'has_next' => $hasNext, 'page_size' => self::PAGE_SIZE, 'filter' => $filter, 'graph_limit' => self::GRAPH_LIMIT];
     }
 
     public function history(GitHistoryQuery $filter): array

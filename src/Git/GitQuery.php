@@ -26,7 +26,7 @@ final class GitQuery
     {
         $this->catalog->repository($repositoryId);
         $rows = $this->db->fetchAllAssociative("SELECT sha, metadata FROM git_event WHERE repository_id = ? AND kind IN ('commit', 'merge') ORDER BY observed_at DESC, id DESC LIMIT ".min(200, max(1, $limit)), [$repositoryId]);
-        $lines = ['graph LR'];
+        $lines = ['graph TD'];
         $nodes = [];
         $parents = [];
         foreach ($rows as $row) {

@@ -98,7 +98,7 @@ final class DashboardProjection
     private function provenanceGraph(string $taskId, array $associations): string
     {
         $task = 't'.preg_replace('/[^a-f0-9]/i', '', $taskId);
-        $lines = ['flowchart LR', $task.'["Task"]'];
+        $lines = ['flowchart TD', $task.'["Task"]'];
         foreach ($associations as $association) {
             $sha = $association['sha'];
             if (preg_match('/^[a-f0-9]{40,64}$/D', $sha)) {
@@ -116,7 +116,7 @@ final class DashboardProjection
 
     private function dependencyGraph(array $dependencies): string
     {
-        $graph = ['flowchart LR'];
+        $graph = ['flowchart TD'];
         foreach ($dependencies as $edge) {
             // Only generated hex identifiers enter Mermaid syntax; titles remain in escaped HTML.
             $task = preg_replace('/[^a-f0-9]/i', '', $edge['task_id']);

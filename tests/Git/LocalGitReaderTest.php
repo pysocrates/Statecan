@@ -24,6 +24,11 @@ final class LocalGitReaderTest extends KernelTestCase
             $commit = array_values($snapshot['commits'])[0];
             self::assertSame(['hello.txt'], $commit['files']);
             self::assertSame(['task-id'], $commit['trailers']['task']);
+            (new Process(['git', '-C', $path, 'branch', 'agents/new-worker']))->mustRun();
+            (new Process(['git', '-C', $path, 'update-ref', 'refs/remotes/team/new-worker', $snapshot['refs']['refs/heads/main']]))->mustRun();
+            $updated = (new LocalGitReader($path))->snapshot($path);
+            self::assertArrayHasKey('refs/heads/agents/new-worker', $updated['refs']);
+            self::assertArrayHasKey('refs/remotes/team/new-worker', $updated['refs']);
         } finally {
             (new Filesystem())->remove($path);
         }

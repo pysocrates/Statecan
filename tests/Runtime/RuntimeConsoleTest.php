@@ -21,7 +21,7 @@ final class RuntimeConsoleTest extends WebTestCase
         $db = $em->getConnection();
         $id = 'runtime-ui-'.bin2hex(random_bytes(8));
         $db->executeStatement("INSERT INTO background_job (id, message_type, status, attempts, correlation_id, created_at, error, queue_name) VALUES (?, 'App\\Message\\OutboxMessage', 'dead_letter', 6, ?, CURRENT_TIMESTAMP, ?, 'receipts')", [$id, $id, '<script>unsafe error</script>']);
-        $db->executeStatement("INSERT INTO outbox_event (id, type, aggregate_id, payload, created_at) VALUES (?, 'receipt.requested', ?, '{}', CURRENT_TIMESTAMP)", [$id, $id]);
+        $db->executeStatement("INSERT INTO outbox_event (id, type, aggregate_id, payload, created_at) VALUES (?, 'receipt.requested', ?, '{}', CURRENT_TIMESTAMP AT TIME ZONE 'UTC')", [$id, $id]);
         $workerId = 'runtime-worker-'.bin2hex(random_bytes(6));
         $db->executeStatement("INSERT INTO worker_process (id, hostname, pid, transports, started_at, last_seen_at, last_progress_at, handled_count) VALUES (?, 'test-worker', 1, '[\"receipts\"]', CURRENT_TIMESTAMP - INTERVAL '301 seconds', CURRENT_TIMESTAMP - INTERVAL '301 seconds', CURRENT_TIMESTAMP - INTERVAL '301 seconds', 2)", [$workerId]);
         try {
