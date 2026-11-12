@@ -1,4 +1,7 @@
 security:
+    role_hierarchy:
+        ROLE_ADMIN: [ROLE_OPERATOR, ROLE_USER]
+        ROLE_OPERATOR: ROLE_USER
     password_hashers:
         Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: auto
     providers:
@@ -10,6 +13,11 @@ security:
         dev:
             pattern: ^/(_profiler(/|$)|(_wdt|assets|build)/)
             security: false
+        agent_api:
+            request_matcher: App\Security\AgentApiRequestMatcher
+            stateless: true
+            access_token:
+                token_handler: App\Security\AgentTokenHandler
         main:
             lazy: true
             provider: app_users
@@ -22,11 +30,15 @@ security:
                 target: app_login
                 enable_csrf: true
     access_control:
+        - { path: ^/api/v1, roles: [ROLE_AGENT, ROLE_OPERATOR] }
         - { path: ^/(login|register)$, roles: PUBLIC_ACCESS }
         - { path: ^/, roles: IS_AUTHENTICATED_FULLY }
 when@test:
     security:
-        password_hashers:
+        role_hierarchy:
+        ROLE_ADMIN: [ROLE_OPERATOR, ROLE_USER]
+        ROLE_OPERATOR: ROLE_USER
+    password_hashers:
             Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
                 algorithm: auto
                 cost: 4
