@@ -6,7 +6,7 @@
     const freshness = document.getElementById('freshness');
     const error = document.getElementById('console-error');
     const labels = {operations: 'Operations', work: 'Work', git: 'Git', history: 'History', runtime: 'Runtime'};
-    const names = [...Object.keys(labels), 'inspector'];
+    const names = [...Object.keys(labels), 'inspector', 'projects'];
     const handlers = new Map();
     const dirty = new Map();
     const running = new Map();
@@ -154,13 +154,34 @@
         }});
     }
 
+    handlers.set('projects', {refresh: async ({signal}) => {
+        const select = document.getElementById('project-select');
+        if (!select) return;
+        const url = new URL(componentUrl('projects'));
+        url.pathname = url.pathname.replace(/\/dashboard\/components\/projects$/, '/api/v1/observability/components/projects');
+        const response = await request(url, {signal});
+        const data = await response.json();
+        const next = select.cloneNode(false);
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Select project';
+        next.append(placeholder);
+        for (const project of data.projects) {
+            const option = document.createElement('option');
+            option.value = project.id;
+            option.textContent = project.name;
+            next.append(option);
+        }
+        morph(select, next);
+    }});
+
     async function refreshComponent(name) {
-        if (stopped || name !== view || !dirty.has(name) || !handlers.has(name) || running.has(name)) return;
+        if (stopped || (name !== view && name !== 'projects') || !dirty.has(name) || !handlers.has(name) || running.has(name)) return;
         const context = dirty.get(name);
         dirty.delete(name);
         const mount = root.querySelector(`[data-console-component="${name}"]`);
         mount?.setAttribute('aria-busy', 'true');
-        freshness.textContent = 'Refreshing ' + labels[name] + '…';
+        if (name === view) freshness.textContent = 'Refreshing ' + labels[name] + '…';
         const timeout = AbortSignal.timeout(15000);
         const task = Promise.resolve().then(() => handlers.get(name).refresh({...context, component: name, signal: AbortSignal.any([controller.signal, timeout])}));
         running.set(name, task);
@@ -196,6 +217,7 @@
         }
         emit('statecan:invalidate', payload);
         refreshComponent(view);
+        refreshComponent('projects');
     }
     function invalidate(payload = {}) {
         if (stopped) return;

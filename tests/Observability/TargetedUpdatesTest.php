@@ -52,6 +52,11 @@ final class TargetedUpdatesTest extends WebTestCase
             self::assertResponseIsSuccessful();
             self::assertSelectorExists('[data-console-component="work"]');
             self::assertSelectorTextContains('.task-card', 'After update');
+            $client->request('GET', '/api/v1/observability/components/projects');
+            self::assertResponseIsSuccessful();
+            $projects = json_decode($client->getResponse()->getContent(), true, flags: JSON_THROW_ON_ERROR);
+            self::assertContains($project->getId(), array_column($projects['projects'], 'id'));
+            self::assertSame(['projects', 'project', 'page'], array_keys($projects));
             $heartbeat = self::getContainer()->get(ActivityInvalidation::class)->batch([['table' => 'agent_session', 'id' => 'session-id', 'revision' => 'revision']], $project->getId());
             self::assertNotContains('work', $heartbeat['components']);
             self::assertNotContains('git', $heartbeat['components']);

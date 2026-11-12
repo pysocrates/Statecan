@@ -5,7 +5,7 @@ namespace App\Observability;
 /** Stable component/entity routing, not a reconstruction of application state. */
 final class ActivityInvalidation
 {
-    public const COMPONENTS = ['operations', 'work', 'git', 'history', 'runtime', 'inspector'];
+    public const COMPONENTS = ['operations', 'work', 'git', 'history', 'runtime', 'inspector', 'projects'];
     private const ROUTES = [
         'project' => self::COMPONENTS,
         'task' => ['operations', 'work', 'history', 'inspector'],

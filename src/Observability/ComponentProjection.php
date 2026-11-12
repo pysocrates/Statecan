@@ -26,6 +26,11 @@ final readonly class ComponentProjection
 
     public function read(string $component, ObservationFilter $filter): array
     {
+        if ('projects' === $component) {
+            $projects = $this->db->fetchAllAssociative('SELECT id, name FROM project ORDER BY id LIMIT 100');
+
+            return ['projects' => $projects, 'project' => $filter->project ?? ($projects[0]['id'] ?? null), 'page' => $filter->page];
+        }
         if (!in_array($component, ['operations', 'work'], true)) {
             throw new NotFoundHttpException('Unknown console component.');
         }

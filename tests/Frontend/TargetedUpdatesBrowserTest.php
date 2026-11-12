@@ -61,6 +61,11 @@ JS, [$stable->getId()]);
             self::assertLessThanOrEqual(2, $reads);
             self::assertSame(1, $browser->executeScript('return document.querySelectorAll(\'[data-console-component="work"]\').length'));
             self::assertTrue($browser->executeScript('return window.__link.isConnected && document.activeElement === window.__link'));
+            $browser->executeScript('window.__projectSelect=document.getElementById("project-select");window.__projectSelect.focus();');
+            $em->getConnection()->update('project', ['name' => 'Renamed live project'], ['id' => $project->getId()]);
+            $browser->getWebDriver()->wait(10)->until(fn (): bool => $browser->executeScript('return document.getElementById("project-select").selectedOptions[0].textContent === "Renamed live project"'));
+            self::assertTrue($browser->executeScript('return document.activeElement === window.__projectSelect'));
+            self::assertSame($project->getId(), $browser->executeScript('return window.__projectSelect.value'));
         } finally {
             $browser?->executeScript('window.dispatchEvent(new Event("pagehide"))');
             $db = $em->getConnection();
