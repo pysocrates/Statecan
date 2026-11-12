@@ -221,13 +221,15 @@ JS);
         self::assertStringContainsString('No', $browser->executeScript('return document.querySelector(".history-records").textContent'));
 
         $this->view('runtime');
-        $browser->waitForVisibility('#runtime-panel');
+        $browser->waitForVisibility('#runtime-panel[data-runtime-loaded="true"]:not([aria-busy="true"])');
+        $browser->executeScript('window.__qaRuntimeUpdates=0;document.addEventListener("statecan:component-updated",event=>{if(event.detail.component==="runtime")window.__qaRuntimeUpdates++})');
         $browser->getWebDriver()->findElement(WebDriverBy::id('runtime-refresh'))->click();
+        $browser->getWebDriver()->wait(10)->until(fn (): bool => $browser->executeScript('return window.__qaRuntimeUpdates > 0 && !document.getElementById("runtime-panel").hasAttribute("aria-busy")'));
         $selector = '[data-runtime-detail="job-'.$this->jobId.'"]';
         $browser->waitForVisibility($selector);
         $browser->getWebDriver()->findElement(WebDriverBy::cssSelector($selector.' > summary'))->click();
         $browser->executeScript('document.querySelector(arguments[0]).focus()', [$selector.' > summary']);
-        $browser->executeScript('window.__qaRuntimeUpdates=0;document.addEventListener("statecan:component-updated",event=>{if(event.detail.component==="runtime")window.__qaRuntimeUpdates++});window.StatecanConsole.invalidate({components:["runtime"],entities:[],reconcile:false})');
+        $browser->executeScript('window.__qaRuntimeUpdates=0;window.StatecanConsole.invalidate({components:["runtime"],entities:[],reconcile:false})');
         $browser->getWebDriver()->wait(10)->until(fn (): bool => $browser->executeScript('return window.__qaRuntimeUpdates > 0 && !document.getElementById("runtime-panel").hasAttribute("aria-busy")'));
         self::assertTrue($browser->executeScript('return document.querySelector(arguments[0]).open', [$selector]));
         self::assertSame('job-'.$this->jobId, $browser->executeScript('return document.activeElement.closest("[data-runtime-detail]")?.dataset.runtimeDetail'));
