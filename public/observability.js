@@ -59,7 +59,9 @@
         if (stopped) throw new Error('Session unavailable.');
         const target = new URL(url, location.href);
         if (target.origin !== location.origin) throw new Error('Console reads must use the current origin.');
-        const response = await fetch(target, {credentials: 'same-origin', cache: 'no-store', ...options, signal: options.signal || controller.signal});
+        const headers = new Headers(options.headers);
+        headers.set('X-Requested-With', 'XMLHttpRequest');
+        const response = await fetch(target, {credentials: 'same-origin', cache: 'no-store', ...options, headers, signal: options.signal || controller.signal});
         if ([401, 403].includes(response.status) || response.redirected) {
             expire();
             throw new Error('Session unavailable.');
