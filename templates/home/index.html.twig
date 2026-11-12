@@ -2,5 +2,6 @@
 {% block title %}Statecan{% endblock %}
 {% block body %}
 <main><h1>Statecan</h1><p>Signed in as {{ app.user.userIdentifier }}.</p>
+{% if is_granted('ROLE_OPERATOR') %}<p><a href="{{ path('app_dashboard') }}">Open operator dashboard</a></p>{% endif %}
 <form action="{{ path('app_logout') }}" method="post"><input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}"><button>Sign out</button></form></main>
 {% endblock %}

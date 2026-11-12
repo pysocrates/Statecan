@@ -1,0 +1,25 @@
+{% macro table(rows) %}
+{% if rows is empty %}<p class="muted">No observations yet.</p>{% else %}
+<div class="scroll"><table><thead><tr>{% for key in rows|first|keys %}<th>{{ key|replace({'_':' '}) }}</th>{% endfor %}</tr></thead><tbody>
+{% for row in rows %}<tr>{% for value in row %}<td>{% if value is iterable %}<pre>{{ value|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>{% else %}{{ value }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% endmacro %}
+{% import _self as ui %}
+<h1>Operator dashboard</h1>
+<form action="{{ path('app_dashboard') }}" method="get"><label>Project <select name="project" onchange="this.form.submit()"><option value="">Select project</option>{% for project in snapshot.projects %}<option value="{{ project.id }}" {{ project.id == snapshot.project ? 'selected' : '' }}>{{ project.name }}</option>{% endfor %}</select></label><button>View</button></form>
+<p class="muted">Authoritative snapshot · page {{ snapshot.page + 1 }} · up to {{ snapshot.page_size }} rows per history{% if snapshot.has_next %} · more tasks on next page{% endif %}. Worker health is global; activity is scoped to the selected project.</p>
+<nav aria-label="History pages">{% if snapshot.page > 0 %}<a href="{{ path('app_dashboard', {project:snapshot.project, task: snapshot.task.id|default(null), page:snapshot.page - 1}) }}">← Previous</a>{% endif %} <a href="{{ path('app_dashboard', {project:snapshot.project, task:snapshot.task.id|default(null), page:snapshot.page + 1}) }}">Next histories →</a></nav>
+<section aria-label="Kanban"><h2>Kanban</h2><div class="board">{% for state, tasks in snapshot.kanban %}<section class="column"><h3>{{ state|replace({'_':' '}) }}</h3>{% for task in tasks %}<article><a href="{{ path('app_dashboard', {project:snapshot.project, task:task.id}) }}">{{ task.title }}</a><small>Version {{ task.version }} · contract {{ task.contract_version }}</small></article>{% else %}<p class="muted">No tasks on this page</p>{% endfor %}</section>{% endfor %}</div></section>
+{% if snapshot.task %}
+<section id="task-inspector"><h2>Task inspector · {{ snapshot.task.title }}</h2><p>{{ snapshot.task.id }} · {{ snapshot.task.status }} · version {{ snapshot.task.version }}</p>
+<details><summary>Versioned contracts</summary>{{ ui.table(snapshot.task.contracts) }}</details>
+<h3>State transition timeline</h3>{{ ui.table(snapshot.task.events) }}
+<h3>Task receipts</h3>{{ ui.table(snapshot.task.receipts) }}
+<h3>Task → commit provenance</h3><pre>{{ snapshot.task.provenance_graph }}</pre><pre>{{ snapshot.task.git|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+</section>{% endif %}
+<section><h2>Dependency graph</h2><p class="muted">Mermaid source, bounded to this history page. Arrows point from prerequisite to dependent task.</p><pre>{{ snapshot.dependency_graph }}</pre>{{ ui.table(snapshot.dependencies) }}</section>
+<section><h2>Agent sessions</h2>{{ ui.table(snapshot.sessions) }}</section>
+<section><h2>Git activity ledger and graphs</h2>{% for repository in snapshot.repositories %}<details open><summary>Repository {{ repository.id }} · observed {{ repository.observed_at|default('not yet') }}</summary><h3>Observed refs</h3><pre>{{ repository.refs }}</pre><h3>Ledger</h3><pre>{{ repository.events|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Commit graph · Mermaid source</h3><pre>{{ repository.graph is iterable ? repository.graph|json_encode(constant('JSON_PRETTY_PRINT')) : repository.graph }}</pre></details>{% else %}<p class="muted">No registered repositories.</p>{% endfor %}</section>
+<section><h2>Historical receipts</h2><p class="muted">Pending attempts and verified evidence remain distinct. Hashes record integrity; storage policy provides immutability.</p>{{ ui.table(snapshot.receipts) }}{% for receipt in snapshot.receipts %}<p><a href="{{ path('api_observability_receipt', {id:receipt.id}) }}">Inspect canonical evidence · {{ receipt.id }}</a></p>{% endfor %}</section>
+<section><h2>Worker health</h2><pre>{{ snapshot.health|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Queues</h3><pre>{{ snapshot.queues|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Background jobs</h3><pre>{{ snapshot.jobs|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre></section>
+<section><h2>Live activity</h2><p>Notifications refresh this authoritative snapshot. <button type="button" id="refresh-now">Refresh now</button></p><ol id="activity-log" aria-live="polite"></ol></section>

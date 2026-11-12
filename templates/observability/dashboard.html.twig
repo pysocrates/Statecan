@@ -1,0 +1,10 @@
+{% extends 'base.html.twig' %}
+{% block title %}Statecan · Operations{% endblock %}
+{% block stylesheets %}<link rel="stylesheet" href="{{ app.request.basePath }}/observability.css">{% endblock %}
+{% block javascripts %}<script src="{{ app.request.basePath }}/observability.js" defer></script>{% endblock %}
+{% block body %}
+<header><a href="{{ path('app_home') }}">Statecan</a> / Human observability <span id="connection" role="status">Connecting…</span></header>
+<main id="observability" data-events="{{ path('api_observability_events', app.request.query.all) }}" data-fragment="{{ path('app_dashboard_fragment', app.request.query.all) }}">
+{% include 'observability/_snapshot.html.twig' %}
+</main>
+{% endblock %}
