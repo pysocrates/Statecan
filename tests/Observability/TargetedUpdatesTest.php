@@ -48,6 +48,10 @@ final class TargetedUpdatesTest extends WebTestCase
             self::assertSame('After update', $work['work_groups']['ready'][0]['title']);
             self::assertArrayNotHasKey('repositories', $work);
             self::assertArrayNotHasKey('sessions', $work);
+            $client->request('GET', '/dashboard/components/work?project='.$project->getId());
+            self::assertResponseIsSuccessful();
+            self::assertSelectorExists('[data-console-component="work"]');
+            self::assertSelectorTextContains('.task-card', 'After update');
             $heartbeat = self::getContainer()->get(ActivityInvalidation::class)->batch([['table' => 'agent_session', 'id' => 'session-id', 'revision' => 'revision']], $project->getId());
             self::assertNotContains('work', $heartbeat['components']);
             self::assertNotContains('git', $heartbeat['components']);
