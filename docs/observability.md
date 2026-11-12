@@ -2,8 +2,9 @@
 
 Sign in through the existing form login using an account granted `ROLE_OPERATOR`
 (or `ROLE_ADMIN` through the shared role hierarchy), then open `/dashboard`.
-Agent bearer credentials do not grant operator permissions. Registration does not
-automatically grant operator access; use the existing operator provisioning flow.
+Agent bearer credentials do not grant operator permissions. The first registered
+account on an empty installation automatically receives operator access. Later
+accounts require an explicit grant with `app:operator:grant`.
 
 The server renders project selection, a paged Kanban board, task/contract inspector,
 state transitions, agent session heartbeats, dependency/provenance diagrams and Mermaid source, indexed Git
