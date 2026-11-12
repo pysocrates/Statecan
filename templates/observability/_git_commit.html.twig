@@ -1,0 +1,11 @@
+<div class="git-commit-detail">
+    <p class="git-identity"><code>{{ event.sha }}</code><span class="status">{{ event.kind }}</span></p>
+    <dl class="git-facts"><div><dt>Recorded author</dt><dd>{{ event.author|default('Not recorded', true) }}</dd></div><div><dt>Authored</dt><dd>{{ event.authored_at|default('Not recorded', true) }}</dd></div><div><dt>Observed (UTC)</dt><dd>{{ event.observed_at }}</dd></div></dl>
+    <p class="git-message">{{ event.message|default('No commit message', true) }}</p>
+    {% if event.reverts %}<p>Revert reference: <code>{{ event.reverts }}</code> · reported in commit message</p>{% endif %}
+    <h4>Task and session correlations</h4>
+    {% for association in event.associations %}<div class="git-association"><a data-inspect-task="{{ association.task_id }}" data-project-id="{{ project }}" href="{{ path('app_dashboard', {project:project,task:association.task_id}) }}#git">{{ association.title }}</a><span class="status">{{ association.verification_status|replace({'_':' '}) }}</span><small>{{ association.source }} · {{ association.confidence|replace({'_':' '}) }}{% if association.session_id %} · Session <code>{{ association.session_id }}</code>{% endif %}{% if association.agent %} · {{ association.agent }}{% endif %}</small></div>{% else %}<p class="muted">No validated task reference was indexed for this commit.</p>{% endfor %}
+    <p class="git-caveat">Trailers are self-reported. Validated identities do not authenticate authorship or prove task execution.</p>
+    <details data-review-detail="files-{{ event.sha }}"><summary>Changed files · {{ event.file_count }}{% if event.file_count > 100 %} (first 100 shown){% endif %}</summary><ul class="git-files">{% for file in event.files %}<li><code>{{ file }}</code></li>{% else %}<li>No file changes recorded.</li>{% endfor %}</ul></details>
+    <details data-review-detail="parents-{{ event.sha }}"><summary>Parent commits · {{ event.parents|length }}</summary><ul class="git-files">{% for parent in event.parents %}<li><code>{{ parent }}</code></li>{% else %}<li>Root commit.</li>{% endfor %}</ul></details>
+</div>
