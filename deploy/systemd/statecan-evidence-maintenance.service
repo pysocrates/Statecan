@@ -1,0 +1,16 @@
+[Unit]
+Description=Statecan lease recovery and receipt reconciliation
+After=network.target
+
+[Service]
+Type=oneshot
+User=statecan
+Group=statecan
+WorkingDirectory=/srv/statecan
+ExecStart=/usr/bin/php bin/console app:leases:recover --env=prod --no-debug
+ExecStart=/usr/bin/php bin/console app:receipts:reconcile --env=prod --no-debug
+TimeoutStartSec=300
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/srv/statecan/var
