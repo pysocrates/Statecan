@@ -2,11 +2,13 @@
 
 namespace App\Tests;
 
+use App\Agent\LeaseService;
 use App\Entity\Agent;
 use App\Entity\CompletionReceipt;
 use App\Entity\Project;
 use App\Entity\Task;
 use App\Entity\TaskContract;
+use App\Entity\TaskLease;
 use App\Receipt\ReceiptStorage;
 use App\Entity\OutboxEvent;
 use App\Message\OutboxMessage;
@@ -19,6 +21,16 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 final class AgentApiTest extends WebTestCase
 {
     public function testAgentCompletesTaskWithVerifiableReceipt(): void
+    {
+        $this->completeTask(false);
+    }
+
+    public function testLeaseExpiryDuringReceiptMaterializationPreservesPendingCompletion(): void
+    {
+        $this->completeTask(true);
+    }
+
+    private function completeTask(bool $expireDuringMaterialization): void
     {
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
@@ -68,6 +80,39 @@ final class AgentApiTest extends WebTestCase
             $container = self::getContainer();
             $em = $container->get(EntityManagerInterface::class);
             self::assertSame('completion_pending_evidence', $em->find(Task::class, $id)->getStatus());
+            if ($expireDuringMaterialization) {
+                // Interleave recovery in the storage/DB boundary used by ReceiptProcessor:
+                // immutable bytes exist, but receipt metadata and task are not finalized yet.
+                $receipt = $em->find(CompletionReceipt::class, $pending['receiptId']);
+                $storedHash = $container->get(ReceiptStorage::class)->materialize($receipt);
+                self::assertSame('pending', $receipt->getStatus());
+                self::assertNull($receipt->getHash());
+                $em->getConnection()->executeStatement("UPDATE task_lease SET expires_at = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 second' WHERE task_id = ?", [$id]);
+                $em->clear();
+                $container->get(LeaseService::class)->recoverExpired();
+                $em->clear();
+                $recoveredTask = $em->find(Task::class, $id);
+                $recoveredLease = $em->find(TaskLease::class, $id);
+                self::assertSame('completion_pending_evidence', $recoveredTask->getStatus());
+                self::assertSame($pending['taskVersion'], $recoveredTask->getVersion());
+                self::assertSame(0, $recoveredLease->getExpiresAt()->getTimestamp());
+                self::assertSame($lease['generation'], $recoveredLease->getGeneration());
+                self::assertSame('pending', $em->find(CompletionReceipt::class, $pending['receiptId'])->getStatus());
+                self::assertSame(0, (int) $em->getConnection()->fetchOne("SELECT COUNT(*) FROM state_event WHERE task_id = ? AND actor_id = 'lease-recovery'", [$id]));
+
+                $expiredInput = ['sessionId' => $session['id'], 'token' => $input['token'], 'generation' => $lease['generation'], 'expectedVersion' => $pending['taskVersion']];
+                $client->jsonRequest('POST', '/api/v1/tasks/'.$id.'/heartbeat', $expiredInput, $headers + ['HTTP_IDEMPOTENCY_KEY' => 'expired-heartbeat-'.$id]);
+                self::assertResponseStatusCodeSame(409);
+                $client->jsonRequest('POST', '/api/v1/tasks/'.$id.'/claim', array_replace($expiredInput, ['token' => bin2hex(random_bytes(32))]), $headers + ['HTTP_IDEMPOTENCY_KEY' => 'pending-reclaim-'.$id]);
+                self::assertResponseStatusCodeSame(409);
+
+                // Use a fresh request/kernel after the rejected command's transaction rollback.
+                $client->request('GET', '/api/v1/tasks/'.$id, server: $headers);
+                self::assertResponseIsSuccessful();
+                self::assertSame('completion_pending_evidence', json_decode($client->getResponse()->getContent(), true, flags: JSON_THROW_ON_ERROR)['status']);
+                $container = self::getContainer();
+                $em = $container->get(EntityManagerInterface::class);
+            }
             $event = $em->getRepository(OutboxEvent::class)->findOneBy(['type' => 'receipt.requested', 'aggregateId' => $pending['receiptId']]);
             self::assertNotNull($event);
             $receiver = $container->get('messenger.transport.receipts');
@@ -83,6 +128,17 @@ final class AgentApiTest extends WebTestCase
             self::assertSame('verified', $receipt->getStatus());
             self::assertSame('completed', $receipt->getTask()->getStatus());
             self::assertSame(hash('sha256', $receipt->getCanonicalContent()), $container->get(ReceiptStorage::class)->verify($receipt));
+            if ($expireDuringMaterialization) {
+                self::assertSame($storedHash, $receipt->getHash());
+                self::assertSame($session['id'], $receipt->getSession()->getId());
+                self::assertSame($lease['generation'], $receipt->getLeaseGeneration());
+                self::assertSame($pending['taskVersion'] + 1, $receipt->getTask()->getVersion());
+                self::assertSame(1, (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM completion_receipt WHERE task_id = ?', [$id]));
+                self::assertSame(1, (int) $em->getConnection()->fetchOne("SELECT COUNT(*) FROM state_event WHERE task_id = ? AND to_state = 'completed'", [$id]));
+                $container->get(LeaseService::class)->recoverExpired();
+                $em->clear();
+                self::assertSame('completed', $em->find(Task::class, $id)->getStatus());
+            }
             $client->request('GET', '/api/v1/tasks/'.$id.'/receipts', server: $headers);
             self::assertResponseIsSuccessful();
             self::assertStringContainsString('verified', $client->getResponse()->getContent());

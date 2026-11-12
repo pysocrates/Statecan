@@ -67,6 +67,24 @@ constraints prevent duplicate attempts/finalization for replayed requests.
 The supplied systemd evidence-maintenance service/timer run both every minute;
 adapt its user, application directory and writable storage paths for deployment.
 
+### Lease expiry while evidence is pending
+
+A completion accepted under a valid lease remains authorized after that lease
+expires. Recovery releases the expired lease (retaining its generation), but does
+not move a `completion_pending_evidence` task back to ready or change its version.
+Expired owners cannot renew, and pending tasks cannot be reclaimed. The receipt
+worker verifies the accepted artifact and finalizes the task using the recorded
+session, contract version and fencing generation; a live lease is not required
+for that server-side finalization.
+
+`AgentApiTest::testLeaseExpiryDuringReceiptMaterializationPreservesPendingCompletion`
+exercises this boundary with PostgreSQL and the real receipt transport/handler:
+write the artifact while metadata is pending, expire the lease, run recovery,
+reject stale commands/reclaim, then finish receipt processing. It verifies the
+original artifact hash/provenance, one finalized receipt, one completed transition,
+and an unchanged completed state after another recovery pass. The ordering is
+deterministically interleaved; it is not a concurrency stress test.
+
 Errors use `{ "error": { "status": 409, "code": "conflict", "message": "..." } }`.
 Framework validation errors return 422, malformed input 400, unsupported format
 415, authentication 401, unauthorized actions 403, missing resources 404 and
