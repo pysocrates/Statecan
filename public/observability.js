@@ -3,9 +3,10 @@
     if (!root) return;
     const status = document.getElementById('connection');
     let updating = false;
+    let pending = false;
     const history = [];
     async function refresh() {
-        if (updating) return;
+        if (updating) { pending = true; return; }
         updating = true;
         try {
             const response = await fetch(root.dataset.fragment, {credentials: 'same-origin', cache: 'no-store'});
@@ -26,6 +27,10 @@
             status.textContent = 'Refresh unavailable · retrying';
         } finally {
             updating = false;
+            if (pending) {
+                pending = false;
+                refresh();
+            }
         }
     }
     root.addEventListener('click', event => {

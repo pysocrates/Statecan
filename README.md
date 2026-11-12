@@ -65,11 +65,13 @@ Use migrations for schema changes. The application requires PostgreSQL; the lega
 symfony serve -d
 ```
 
-Without the Symfony CLI, use PHP's development server:
+Without the Symfony CLI, use PHP's development server with multiple workers (Unix):
 
 ```bash
-php -S 127.0.0.1:8000 -t public
+PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8000 -t public
 ```
+
+SSE streams occupy a worker, so the web server must allow concurrent requests. See [stream deployment notes](docs/observability.md).
 
 Open `/register`, create the initial account, then sign in and open `/dashboard`.
 
@@ -223,14 +225,14 @@ php bin/console lint:yaml config/
 php bin/console lint:twig templates/
 ```
 
-The v1 verification run passed **10 tests and 113 assertions**, including registration/login, first-account operator access, task transactions, agent claims/completion, receipt verification, Git indexing, worker redelivery, and dashboard reconnect behavior. This is a deliberately small smoke suite, not exhaustive concurrency, fault-injection, security, or load testing.
+The initial v1 verification run passed **10 tests and 113 assertions**, including registration/login, first-account operator access, task transactions, agent claims/completion, receipt verification, Git indexing, worker redelivery, and dashboard reconnect behavior. This is a deliberately small smoke suite, not exhaustive concurrency, fault-injection, security, or load testing.
 
 ## Current boundaries
 
 - Operator visibility is application-wide; project membership and tenant isolation are not modeled.
 - The dashboard is primarily read-only. Project/task administration is API-driven.
 - Git integration supports trusted local repositories only. There are no GitHub webhooks or remote fetches in v1, and indexing scans locally reachable history.
-- SSE uses short authenticated connections with a three-second reconnect hint and authoritative refresh. Larger installations may need a dedicated notification service.
+- SSE uses PostgreSQL commit notifications to push changes over open authenticated streams. `STATECAN_SSE_DURATION` defaults to 25 seconds; reconnects recover missed changes and recheck permissions. Each stream needs a PHP worker and a dedicated PostgreSQL listener connection. Larger installations may need Mercure or another dedicated notification service.
 - Queue depth and job state do not prove worker process liveness.
 - Filesystem administrators can alter receipt files unless storage adds stronger controls; verification checks stored bytes, not the truth of reported work.
 - Existing MySQL deployments require a separate data migration to PostgreSQL.

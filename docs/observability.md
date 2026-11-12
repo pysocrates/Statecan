@@ -29,19 +29,47 @@ MapQueryString validation. HTML and JSON are private and must not be proxy cache
 The operator role currently has application-wide visibility; project membership
 is not modeled in the existing permissions. Agent/lease secrets are never projected.
 
-SSE uses Symfony `EventStreamResponse` and `ServerEvent`; there is no hub requirement.
-Each authenticated connection emits a snapshot revision hash and closes with a
-three-second retry hint. This avoids reserving PHP workers for idle streams. Every
-reconnect rechecks permissions and refreshes authoritative HTML. `Last-Event-ID`
-only suppresses redundant invalidation, never restricts authoritative refresh.
-The browser also provides manual refresh, retains the last page during failures,
-and records the ten most recent refreshes. Notifications are not a durable event
-ledger. The transition timeline, Git ledger and receipt history supply persisted
-history after gaps. This is a small-installation SSE implementation; it deliberately
-trades a bounded periodic database read for no additional infrastructure. Large
-installations can replace notification delivery with Mercure without changing the
-snapshot API. Serve via the normal Symfony front controller; static CSS/JS live
-under `public/` and require no JavaScript build pipeline.
+SSE uses PostgreSQL `LISTEN/NOTIFY` and Symfony `EventStreamResponse`. Run the
+notification-trigger migration before deploying this code. Statement triggers on
+the projected domain, job, outbox and Messenger tables send an empty invalidation
+payload when a transaction commits. Updates made by HTTP requests, workers and
+maintenance commands all use the same path. Repeated notifications within a
+transaction coalesce; pending notifications are drained before one snapshot read.
+No task data, credentials or user input is sent in the PostgreSQL notification.
+
+Each authorized stream creates a dedicated, nonpersistent PDO PostgreSQL connection,
+commits LISTEN before reading the initial snapshot, and then blocks waiting for
+notifications. The listener never holds an open transaction. A notification causes
+a fresh authoritative snapshot; a changed revision produces a refresh event on the
+existing HTTP connection. Idle streams send comment heartbeats every ten seconds,
+without querying snapshots. Reconnects still refresh authoritative HTML to recover
+changes missed while disconnected; notifications are transient, not a durable ledger.
+`Last-Event-ID` suppresses an unchanged initial invalidation, not the recovery read.
+The browser queues another refresh if an invalidation arrives during an active fetch.
+
+`STATECAN_SSE_DURATION` defaults to 25 seconds (clamped to 1–120). Streams close at
+that deadline so reconnects recheck authentication and operator permissions; a role
+revocation may take up to that interval to close an existing stream. Retry delay is
+three seconds after closure or network failure. Exceptions close the stream and the
+browser reconnects. Listener connections close on completion, error or client abort.
+The session lock is released before streaming so concurrent fragment reads can run.
+
+Capacity matters: each open stream occupies one PHP worker and one additional
+PostgreSQL connection, alongside the normal application connection. Use PHP-FPM or
+another server with sufficient concurrency; a single-process PHP development server
+will block other requests while streaming. On supported Unix systems, use
+`PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8000 -t public` for local development.
+Proxy buffering must be disabled for SSE (`X-Accel-Buffering: no` is set by Symfony),
+and proxy/worker timeouts must exceed the configured stream lifetime. Keep the
+lifetime below PHP's execution timeout, or configure that timeout for streaming.
+Connect listeners directly to PostgreSQL or through session pooling; transaction
+pooling cannot preserve LISTEN registrations. Larger deployments should move the
+subscription fanout to a dedicated hub such as Mercure.
+
+Serve via the normal Symfony front controller; static CSS/JS live under `public/`
+and require no JavaScript build pipeline. PostgreSQL documents the required
+[LISTEN-before-read ordering](https://www.postgresql.org/docs/18/sql-listen.html)
+and [transactional notification delivery](https://www.postgresql.org/docs/18/sql-notify.html).
 
 Worker liveness is displayed exactly as reported by RuntimeMonitor. Queue depth,
 job latency and failure status are observations, not proof that workers are alive.
