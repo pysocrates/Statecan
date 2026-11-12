@@ -28,6 +28,7 @@
         freshness.textContent = 'Data may be stale';
     }
     function showFailure() {
+        if (stopped) return;
         const message = failures.get(view) || failures.get('projects');
         if (message) report(message);
         else error.hidden = true;
@@ -163,10 +164,12 @@
     handlers.set('projects', {refresh: async ({signal}) => {
         const select = document.getElementById('project-select');
         if (!select) return;
-        const url = new URL(componentUrl('projects'));
+        const url = new URL(componentUrl('projects'), location.href);
         url.pathname = url.pathname.replace(/\/dashboard\/components\/projects$/, '/api/v1/observability/components/projects');
         const response = await request(url, {signal});
         const data = await response.json();
+        const empty = document.getElementById('console-no-projects');
+        if (empty) empty.hidden = data.projects.length > 0;
         const next = select.cloneNode(false);
         const placeholder = document.createElement('option');
         placeholder.value = '';

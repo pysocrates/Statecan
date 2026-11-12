@@ -66,6 +66,12 @@ JS, [$stable->getId()]);
             $browser->getWebDriver()->wait(10)->until(fn (): bool => $browser->executeScript('return document.getElementById("project-select").selectedOptions[0].textContent === "Renamed live project"'));
             self::assertTrue($browser->executeScript('return document.activeElement === window.__projectSelect'));
             self::assertSame($project->getId(), $browser->executeScript('return window.__projectSelect.value'));
+            $browser->getWebDriver()->manage()->deleteAllCookies();
+            $browser->executeScript('window.StatecanConsole.refresh();');
+            $browser->getWebDriver()->wait(10)->until(fn (): bool => $browser->executeScript('return document.getElementById("console-error").textContent.includes("session expired")'));
+            $browser->executeScript("document.querySelector('.console-nav [data-view-link=runtime]').click();");
+            self::assertFalse($browser->executeScript('return document.getElementById("console-error").hidden'));
+            self::assertSame('Sign in', $browser->executeScript('return document.querySelector("#console-error a").textContent'));
         } finally {
             $browser?->executeScript('window.dispatchEvent(new Event("pagehide"))');
             $db = $em->getConnection();
