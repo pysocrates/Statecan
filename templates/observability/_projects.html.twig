@@ -1,0 +1,7 @@
+<div data-console-component="projects" data-component-url="{{ path('app_dashboard_component', {component:'projects',project:snapshot.project,page:snapshot.page}) }}">
+<div class="project-toolbar">
+    <form action="{{ path('app_dashboard') }}" method="get"><label for="project-select">Project</label><select id="project-select" name="project"><option value="">Select project</option>{% for project in snapshot.projects %}<option value="{{ project.id }}" {{ project.id == snapshot.project ? 'selected' : '' }}>{{ project.name }}</option>{% endfor %}</select><button>Apply</button></form>
+    <span class="scope-note">Tasks: selected project · Runtime: all projects</span>
+</div>
+<div id="console-no-projects" class="notice" {{ snapshot.projects is not empty ? 'hidden' : '' }}>No projects yet. Create a project and tasks through the authorized API to start observing work. <a href="{{ path('api_observability_snapshot') }}">Inspect available data</a></div>
+</div>

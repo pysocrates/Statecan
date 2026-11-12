@@ -151,9 +151,7 @@ summary { cursor: pointer; }
     .column-description { min-height: 0; }
     .console-nav { padding: .3rem .4rem; gap: .1rem; }
     .console-nav a { font-size: .8rem; }
-    .workspace-actions { display: flex; align-items: center; gap: .6rem; }
-.compact-account { display: none; }
-.workspace-header { gap: .5rem; }
+    .workspace-header { gap: .5rem; }
     .scope-note { font-size: .75rem; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }

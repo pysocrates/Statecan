@@ -1,11 +1,7 @@
 {% import 'observability/_components.html.twig' as ui %}
 {% set ops = snapshot.operations %}
 {% set initial = snapshot.task ? 'work' : 'operations' %}
-<div class="project-toolbar">
-    <form action="{{ path('app_dashboard') }}" method="get"><label for="project-select">Project</label><select id="project-select" name="project"><option value="">Select project</option>{% for project in snapshot.projects %}<option value="{{ project.id }}" {{ project.id == snapshot.project ? 'selected' : '' }}>{{ project.name }}</option>{% endfor %}</select><button>Apply</button></form>
-    <span class="scope-note">Tasks: selected project · Runtime: all projects</span>
-</div>
-{% if snapshot.projects is empty %}<div class="notice">No projects yet. Create a project and tasks through the authorized API to start observing work. <a href="{{ path('api_observability_snapshot') }}">Inspect available data</a></div>{% endif %}
+{% include 'observability/_projects.html.twig' %}
 <section id="view-operations" data-console-view="operations" aria-label="Operations" {{ initial != 'operations' ? 'hidden' : '' }}>
 {% include 'observability/_operations.html.twig' %}
 </section>
