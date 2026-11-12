@@ -14,6 +14,39 @@ Statecan records and governs work performed elsewhere. It does not run LLMs, pla
 - A responsive operator console with an Operations overview, four-group Work board, contextual task inspection, searchable history, interactive Git graphs, structured runtime monitoring, and targeted SSE-driven updates.
 - systemd templates for workers, outbox dispatch, lease recovery, and receipt reconciliation.
 
+## Screenshots
+
+The Operations view brings task activity, operator attention, queue backlog, and worker freshness into one overview.
+
+![Statecan Operations overview showing task activity, system counts, and worker availability](docs/screenshots/operations.png)
+
+<details>
+<summary>Work board</summary>
+
+Tasks are grouped into Ready, In progress, Attention, and Done, while retaining their original status badges and assigned agents.
+
+![Statecan Work board with four task groups and completed agent assignments](docs/screenshots/work-board.png)
+
+</details>
+
+<details>
+<summary>Git branch ancestry</summary>
+
+The vertical tree shows indexed branch tips, forks, and parent relationships. Select a ref to trace its ancestry; dashed links summarize intermediate commits.
+
+![Statecan branch ancestry tree with selectable refs and collapsed commit paths](docs/screenshots/branch-ancestry.png)
+
+</details>
+
+<details>
+<summary>Console navigation</summary>
+
+Switch between Operations, Work, Git, History, and Runtime without leaving the console.
+
+![Statecan navigation with Operations, Work, Git, History, and Runtime views](docs/screenshots/navigation.png)
+
+</details>
+
 ## Requirements
 
 | Dependency | Notes |
