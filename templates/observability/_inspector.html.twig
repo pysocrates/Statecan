@@ -1,10 +1,13 @@
+{% macro budget(value) %}
+    {% if value is iterable %}<dl class="inspector-facts">{% for key, child in value %}<div><dt>{{ key }}</dt><dd>{{ _self.budget(child) }}</dd></div>{% else %}<div><dd class="muted">None specified.</dd></div>{% endfor %}</dl>{% elseif value is same as(null) %}<span class="muted">Not specified</span>{% elseif value is same as(true) %}Yes{% elseif value is same as(false) %}No{% else %}{{ value }}{% endif %}
+{% endmacro %}
 {% if inspector is not defined or inspector is null %}
-<aside id="task-inspector" class="task-inspector" aria-label="Task inspector" hidden data-endpoint-template="{{ path('app_task_inspector', {id:'__TASK__'}) }}" data-task-id="" data-dashboard-url="{{ path('app_dashboard') }}" data-login-url="{{ path('app_login') }}">
+<aside id="task-inspector" class="task-inspector" aria-label="Task inspector" {{ initial_inspector|default(null) ? '' : 'hidden' }} data-endpoint-template="{{ path('app_task_inspector', {id:'00000000-0000-0000-0000-000000000000'}) }}" data-task-id="{{ initial_inspector.task.id|default('') }}" data-project-id="{{ initial_inspector.task.project_id|default('') }}" data-page="{{ initial_inspector.page|default(0) }}" data-contract-version="{{ initial_inspector.contract.version|default('') }}" data-dashboard-url="{{ path('app_dashboard') }}" data-login-url="{{ path('app_login') }}">
     <div class="inspector-toolbar"><span class="eyebrow">TASK INSPECTOR</span><button type="button" id="inspector-close" aria-label="Close task inspector">Close ×</button></div>
     <p id="inspector-loading" role="status" hidden>Loading task…</p>
     <div id="inspector-error" class="notice danger" role="alert" hidden></div>
     <button type="button" id="inspector-retry" hidden>Retry task details</button>
-    <div id="inspector-content"></div>
+    <div id="inspector-content">{% if initial_inspector|default(null) %}{% include 'observability/_inspector.html.twig' with {inspector:initial_inspector} %}{% endif %}</div>
 </aside>
 {% else %}
 {% set task = inspector.task %}
@@ -16,7 +19,7 @@
     <label for="inspector-contract-version">Inspect contract version</label><select id="inspector-contract-version" data-inspector-contract><option value="{{ inspector.contract.version }}" selected>v{{ inspector.contract.version }}{{ inspector.contract.version == task.contract_version ? ' · current' : ' · historical' }}</option>{% for version in inspector.contracts %}{% if version.version != inspector.contract.version %}<option value="{{ version.version }}">v{{ version.version }} · {{ version.created_at|date('M j H:i', 'UTC') }}</option>{% endif %}{% endfor %}</select>
     <h3>Objective</h3><p>{{ contract.objective }}</p>
     {% for field, label in {authorizedScope:'Authorized scope', constraints:'Constraints', acceptanceCriteria:'Acceptance criteria', expectedDeliverables:'Expected deliverables'} %}<h3>{{ label }}</h3><ul class="inspector-requirements">{% for item in attribute(contract, field)|default([]) %}<li>{{ item }}</li>{% else %}<li class="muted">None specified.</li>{% endfor %}</ul>{% endfor %}
-    {% if contract.resourceBudgets|default([]) is not empty %}<h3>Resource budgets</h3><dl class="inspector-facts">{% for name, value in contract.resourceBudgets %}<div><dt>{{ name }}</dt><dd>{{ value }}</dd></div>{% endfor %}</dl>{% endif %}
+    {% if contract.resourceBudgets|default([]) is not empty %}<h3>Resource budgets</h3><dl class="inspector-facts">{% for name, value in contract.resourceBudgets %}<div><dt>{{ name }}</dt><dd>{{ _self.budget(value) }}</dd></div>{% endfor %}</dl>{% endif %}
     <details data-inspector-section="raw-contract"><summary id="inspector-section-raw-contract">Raw contract JSON · v{{ inspector.contract.version }}</summary><pre>{{ contract|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre></details>
 </details>
 <details data-inspector-section="dependencies"><summary id="inspector-section-dependencies">Dependencies · {{ inspector.dependencies|length }}{{ inspector.has_next.dependencies ? '+' : '' }}</summary>

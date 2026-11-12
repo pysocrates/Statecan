@@ -52,7 +52,7 @@
         loading.textContent = content.childElementCount ? 'Refreshing task details…' : 'Loading task…';
         loading.hidden = false;
         retry.hidden = true;
-        const url = new URL(panel.dataset.endpointTemplate.replace('__TASK__', selected), location.origin);
+        const url = new URL(panel.dataset.endpointTemplate.replace('00000000-0000-0000-0000-000000000000', selected).replace('__TASK__', selected), location.origin);
         if (project) url.searchParams.set('project', project);
         url.searchParams.set('page', String(page));
         if (contractVersion) url.searchParams.set('contractVersion', String(contractVersion));
@@ -162,6 +162,15 @@
     });
     window.StatecanInspector = {open, close, refresh};
     const initial = new URL(location.href);
-    if (validId(initial.searchParams.get('task'))) open(initial.searchParams.get('task'), initial.searchParams.get('project'));
+    if (validId(panel.dataset.taskId)) {
+        // Adopt the authorized server-rendered selection without clearing it or stealing focus.
+        selected = panel.dataset.taskId;
+        project = validId(panel.dataset.projectId) ? panel.dataset.projectId : null;
+        page = Math.max(0, Math.min(10000, Number(panel.dataset.page) || 0));
+        contractVersion = Number(panel.dataset.contractVersion) || null;
+        selection();
+    } else if (validId(initial.searchParams.get('task'))) {
+        open(initial.searchParams.get('task'), initial.searchParams.get('project'));
+    }
     window.addEventListener('pagehide', () => { request?.abort(); clearTimeout(timer); }, {once: true});
 })();

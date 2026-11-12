@@ -60,6 +60,18 @@ final class TaskInspectorTest extends WebTestCase
             self::assertSelectorTextContains('[data-inspector-section="ownership"]', 'Inspector agent');
             self::assertSelectorTextContains('[data-inspector-section="receipts"]', 'Verified');
             self::assertSelectorExists('[data-inspector-page="1"]');
+            // The dashboard supplies this same focused projection for an initial SSR selection.
+            $body['contract']['document']['resourceBudgets'] = ['time' => 60, 'tokens' => ['soft' => 1000, 'labels' => ['<safe>']]];
+            $html = self::getContainer()->get(\Twig\Environment::class)->render('observability/_inspector.html.twig', ['initial_inspector' => $body]);
+            $rendered = new \Symfony\Component\DomCrawler\Crawler($html);
+            self::assertCount(1, $rendered->filter('#task-inspector:not([hidden])'));
+            self::assertSame($task->getId(), $rendered->filter('#task-inspector')->attr('data-task-id'));
+            self::assertCount(1, $rendered->filter('#inspector-content #inspector-title'));
+            self::assertStringContainsString('Inspector task', $rendered->filter('#inspector-title')->text());
+            self::assertStringContainsString('soft', $rendered->filter('[data-inspector-section="contract"]')->text());
+            self::assertStringContainsString('<safe>', $rendered->filter('[data-inspector-section="contract"]')->text());
+            self::assertStringNotContainsString('<safe>', $html);
+
         } finally {
             $db->executeStatement('DELETE FROM completion_receipt WHERE task_id = ?', [$task->getId()]);
             $db->executeStatement('DELETE FROM task_lease WHERE task_id = ?', [$task->getId()]);
