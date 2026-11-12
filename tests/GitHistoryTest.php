@@ -34,7 +34,7 @@ final class GitHistoryTest extends WebTestCase
         $session = new AgentSession($agent, 'review');
         $repository = new GitRepository(Uuid::v7()->toRfc4122(), $project, 'fixture:'.bin2hex(random_bytes(8)));
         $receipt = new CompletionReceipt($task, $session, 1, 1, 'review', Uuid::v7()->toRfc4122(), '{}');
-        $contract = new TaskContract($task, 1, ['objective' => 'Inspect real provenance', 'acceptance_criteria' => ['Keep identity confidence honest']]);
+        $contract = new TaskContract($task, 1, ['objective' => 'Inspect real provenance', 'schemaVersion' => 1, 'authorizedScope' => ['src/'], 'constraints' => [], 'dependencies' => [], 'expectedDeliverables' => ['Indexed evidence'], 'acceptanceCriteria' => ['Keep identity confidence honest']]);
         foreach ([$user, $project, $task, $agent, $session, $repository, $receipt, $contract] as $entity) {
             $em->persist($entity);
         }
@@ -82,6 +82,9 @@ final class GitHistoryTest extends WebTestCase
                 $client->request('GET', '/dashboard/history', $query);
                 self::assertResponseIsSuccessful();
                 self::assertSelectorExists('[data-console-component="history"] [data-inspect-task]');
+                if ('contracts' === $kind) {
+                    self::assertSelectorTextContains('.history-detail', 'Keep identity confidence honest');
+                }
             }
             $client->request('GET', '/api/v1/observability/history', ['project' => $project->getId(), 'page' => 1]);
             self::assertCount(1, json_decode($client->getResponse()->getContent(), true)['rows']);

@@ -1,6 +1,7 @@
 (() => {
     const states = new Map();
     let expired = false;
+    let registered = false;
     const names = ['git', 'history'];
     const panel = name => document.querySelector(`[data-console-component="${name}"]`);
     const visible = node => node && !node.closest('[data-console-view][hidden]');
@@ -48,6 +49,17 @@
         if (live && saved.graph) node.querySelector('[data-git-graph]')?.setAttribute('viewBox', saved.graph);
         const focus = saved.focus && node.querySelector(saved.focus);
         if (focus) { focus.focus({preventScroll: true}); if (saved.range) focus.setSelectionRange?.(...saved.range); }
+    }
+    function requestRefresh(name, options = {}) {
+        const node = panel(name);
+        if (!node || expired) return;
+        if (!registered) { refresh(name, options); return; }
+        const state = stateFor(name, node);
+        if (options.explicit || options.params) {
+            state.pending = options;
+            state.controller?.abort();
+        }
+        window.StatecanConsole.invalidate({components: [name]});
     }
     async function refresh(name, {signal, explicit = false, params = null} = {}) {
         const node = panel(name);
@@ -141,7 +153,7 @@
         if (!form) return;
         event.preventDefault();
         form.elements.page.value = '0';
-        refresh(form.closest('[data-console-component]').dataset.consoleComponent, {explicit: true, params: new URLSearchParams(new FormData(form))});
+        requestRefresh(form.closest('[data-console-component]').dataset.consoleComponent, {explicit: true, params: new URLSearchParams(new FormData(form))});
     });
     document.addEventListener('change', event => {
         if (event.target.id === 'git-repository') { const form = event.target.form; form.elements.branch.value = ''; form.requestSubmit(); }
@@ -153,12 +165,12 @@
             if (event.target.closest('[data-view-link]')) queueMicrotask(ensureVisible);
             return;
         }
-        if (event.target.closest('[data-review-refresh]')) { refresh(node.dataset.consoleComponent); return; }
+        if (event.target.closest('[data-review-refresh]')) { requestRefresh(node.dataset.consoleComponent); return; }
         const page = event.target.closest('[data-review-page]');
         if (page && !page.disabled) {
             const params = new URLSearchParams(new URL(stateFor(node.dataset.consoleComponent, node).applied, location.href).search);
             params.set('page', page.dataset.reviewPage);
-            refresh(node.dataset.consoleComponent, {explicit: true, params});
+            requestRefresh(node.dataset.consoleComponent, {explicit: true, params});
         }
         const svg = node.querySelector('[data-git-graph]');
         const zoomButton = event.target.closest('[data-graph-zoom]');
@@ -212,12 +224,22 @@
         document.addEventListener('pointercancel', stop, {once: true});
     });
     function ensureVisible() {
+        if (registered) return;
         names.forEach(name => { const node = panel(name); if (visible(node) && node.dataset.reviewLoaded !== 'true' && !node.hasAttribute('aria-busy')) refresh(name); });
     }
-    names.forEach(name => window.StatecanConsole?.register(name, {refresh: async options => {
-        const success = await refresh(name, options);
-        if (success === false) throw new Error('Focused ' + name + ' data could not be refreshed.');
-    }}));
+    if (window.StatecanConsole) {
+        registered = true;
+        names.forEach(name => window.StatecanConsole.register(name, {refresh: async options => {
+            const node = panel(name);
+            if (!node) return;
+            const state = stateFor(name, node);
+            const pending = state.pending || {};
+            state.pending = null;
+            const success = await refresh(name, {...options, ...pending});
+            if (success === false) throw new Error('Focused ' + name + ' data could not be refreshed.');
+        }}));
+        window.StatecanConsole.invalidate({components: names});
+    }
     document.addEventListener('statecan:view-change', ensureVisible);
     document.addEventListener('statecan:component-updated', ensureVisible);
     document.addEventListener('statecan:session-expired', () => {
