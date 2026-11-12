@@ -7,6 +7,7 @@ use App\Entity\Task;
 use App\Entity\User;
 use App\Service\TaskTransitionService;
 use Doctrine\ORM\EntityManagerInterface;
+use Facebook\WebDriver\WebDriverBy;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\Panther\PantherTestCase;
 
@@ -35,12 +36,15 @@ final class TargetedUpdatesBrowserTest extends PantherTestCase
             $browser = self::createPantherClient(['env' => ['PHP_CLI_SERVER_WORKERS' => '4']], [], ['port' => (int) ($_SERVER['PANTHER_CHROME_DRIVER_PORT'] ?? 9515)]);
             $crawler = $browser->request('GET', '/login');
             $browser->submit($crawler->selectButton('Sign in')->form(['_username' => $user->getEmail(), '_password' => 'targeted-browser-password']));
-            $browser->request('GET', '/dashboard?project='.$project->getId().'#work');
+            $browser->waitForVisibility('form[action$="/logout"]');
+            $browser->request('GET', '/dashboard?project='.$project->getId());
+            $browser->getWebDriver()->findElement(WebDriverBy::cssSelector('[data-view-link=work]'))->click();
             $browser->getWebDriver()->wait(10)->until(fn (): bool => $browser->executeScript('return document.getElementById("freshness").textContent.startsWith("Work updated")'));
             $browser->executeScript(<<<'JS'
 window.__reads = [];
+window.__xhrHeaders = [];
 const fetchOriginal = window.fetch;
-window.fetch = (...args) => { window.__reads.push(String(args[0])); return fetchOriginal(...args); };
+window.fetch = (...args) => { window.__reads.push(String(args[0])); window.__xhrHeaders.push(new Headers(args[1]?.headers).get('X-Requested-With')); return fetchOriginal(...args); };
 window.__work = document.querySelector('[data-console-component="work"]');
 window.__link = document.querySelector('a[href*="' + arguments[0] + '"]');
 window.__link.focus();
@@ -53,6 +57,7 @@ JS, [$stable->getId()]);
             self::assertTrue($browser->executeScript('return window.__link.isConnected && document.activeElement === window.__link'));
             self::assertSame('work', $browser->executeScript('return window.StatecanConsole.view'));
             self::assertSame(0, $browser->executeScript('return window.__reads.filter(url => url.includes("/dashboard/fragment") || url.includes("/observability/snapshot")).length'));
+            self::assertTrue($browser->executeScript('return window.__xhrHeaders.every(value => value === "XMLHttpRequest")'));
             $browser->executeScript('window.__reads=[];window.__updates=0;for(let i=0;i<25;i++)window.StatecanConsole.invalidate({components:["work"],entities:[],reconcile:false});');
             $browser->getWebDriver()->wait(10)->until(fn (): bool => $browser->executeScript('return window.__updates >= 1'));
             $browser->executeAsyncScript('const done=arguments[arguments.length-1];setTimeout(done,700);');
@@ -72,6 +77,12 @@ JS, [$stable->getId()]);
             $browser->executeScript("document.querySelector('.console-nav [data-view-link=runtime]').click();");
             self::assertFalse($browser->executeScript('return document.getElementById("console-error").hidden'));
             self::assertSame('Sign in', $browser->executeScript('return document.querySelector("#console-error a").textContent'));
+            $browser->getWebDriver()->findElement(WebDriverBy::cssSelector('#console-error a'))->click();
+            $browser->waitForVisibility('input[name="_username"]');
+            $crawler = $browser->refreshCrawler();
+            $browser->submit($crawler->selectButton('Sign in')->form(['_username' => $user->getEmail(), '_password' => 'targeted-browser-password']));
+            $browser->waitForVisibility('form[action$="/logout"]');
+            self::assertStringContainsString($user->getEmail(), $browser->executeScript('return document.querySelector("main").textContent'));
         } finally {
             $browser?->executeScript('window.dispatchEvent(new Event("pagehide"))');
             $db = $em->getConnection();
