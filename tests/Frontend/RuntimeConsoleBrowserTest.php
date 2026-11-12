@@ -2,10 +2,12 @@
 
 namespace App\Tests\Frontend;
 
+use App\Entity\Project;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Facebook\WebDriver\Chrome\ChromeDevToolsDriver;
 use Facebook\WebDriver\WebDriverBy;
+use Facebook\WebDriver\WebDriverExpectedCondition;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\Panther\PantherTestCase;
 
@@ -20,6 +22,8 @@ final class RuntimeConsoleBrowserTest extends PantherTestCase
         $user->setEmail('runtime-browser-'.bin2hex(random_bytes(6)).'@example.test');
         $user->setPassword(password_hash('runtime-browser-password', PASSWORD_BCRYPT));
         $user->grantOperator();
+        $project = new Project('Runtime integrated console test');
+        $em->persist($project);
         $em->persist($user);
         $em->flush();
         $db = $em->getConnection();
@@ -30,18 +34,11 @@ final class RuntimeConsoleBrowserTest extends PantherTestCase
             $client = self::createPantherClient(['port' => (int) (getenv('PANTHER_WEB_SERVER_PORT') ?: 9092), 'env' => ['PHP_CLI_SERVER_WORKERS' => '4']], [], ['port' => (int) (getenv('PANTHER_CHROME_DRIVER_PORT') ?: 9522)]);
             $crawler = $client->request('GET', '/login');
             $client->submit($crawler->selectButton('Sign in')->form(['_username' => $user->getEmail(), '_password' => 'runtime-browser-password']));
-            // Exercise the feature's real endpoint/assets without modifying coordinator-owned shell.
-            $client->request('GET', '/dashboard/runtime');
-            $client->executeAsyncScript(<<<'JS'
-const done = arguments[arguments.length - 1];
-let pending = 3;
-const loaded = () => { if (--pending === 0) done(true); };
-for (const href of ['/observability.css', '/console-runtime.css']) {
-    const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = href; link.onload = loaded; document.head.append(link);
-}
-const script = document.createElement('script'); script.src = '/console-runtime.js'; script.onload = loaded; document.head.append(script);
-JS);
-            $client->waitForVisibility('#runtime-panel');
+            // Load production shell, partials and assets exactly as an operator does.
+            $client->request('GET', '/dashboard?project='.$project->getId());
+            $client->getWebDriver()->findElement(WebDriverBy::cssSelector('.console-nav [data-view-link="runtime"]'))->click();
+            $client->waitForVisibility('#runtime-panel[data-runtime-loaded="true"]');
+            self::assertSame('runtime', $client->executeScript('return window.StatecanConsole.view'));
             $devtools = new ChromeDevToolsDriver($client->getWebDriver());
             foreach ([1440, 1024, 768, 390] as $width) {
                 $devtools->execute('Emulation.setDeviceMetricsOverride', ['width' => $width, 'height' => 900, 'deviceScaleFactor' => 1, 'mobile' => false]);
@@ -57,7 +54,9 @@ JS);
             $detail = '[data-runtime-detail="job-'.$id.'"]';
             $client->getWebDriver()->findElement(WebDriverBy::cssSelector($detail.' summary'))->click();
             self::assertTrue($client->executeScript('return document.querySelector(arguments[0]).open', [$detail]));
+            $oldPanel = $client->getWebDriver()->findElement(WebDriverBy::id('runtime-panel'));
             $client->getWebDriver()->findElement(WebDriverBy::id('runtime-refresh'))->click();
+            $client->getWebDriver()->wait(10)->until(WebDriverExpectedCondition::stalenessOf($oldPanel));
             $client->waitForVisibility($detail.'[open]');
             $client->waitForInvisibility('#runtime-panel[aria-busy]');
             self::assertSame('retrying', $client->executeScript('return document.getElementById("runtime-job-filter").value'));
@@ -81,6 +80,7 @@ JS);
             $client?->executeScript('window.dispatchEvent(new Event("pagehide"))');
             $db->delete('background_job', ['id' => $id]);
             $db->delete('app_user', ['id' => $user->getId()]);
+            $db->delete('project', ['id' => $project->getId()]);
         }
     }
 }
