@@ -73,6 +73,7 @@
             if (focus) document.getElementById('inspector-title')?.focus({preventScroll: true});
             else if (state.focus) (document.getElementById(state.focus) || document.getElementById('inspector-pagination'))?.focus({preventScroll: true});
             panel.scrollTop = focus ? 0 : state.scroll;
+            document.dispatchEvent(new CustomEvent('statecan:inspector-updated', {detail: {taskId: selected, projectId: project}}));
         } catch (failure) {
             if (failure.name === 'AbortError' || current !== sequence) return;
             error.textContent = failure instanceof TypeError ? 'Connection failed. Task details may be stale; retry when connected.' : failure.message;
