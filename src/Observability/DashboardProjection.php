@@ -17,6 +17,7 @@ final class DashboardProjection
         private readonly Connection $db,
         private readonly RuntimeMonitor $runtime,
         private readonly GitQuery $git,
+        private readonly GraphPreview $graphs,
     ) {
     }
 
@@ -43,18 +44,21 @@ final class DashboardProjection
                 if (!$inspector) {
                     throw new NotFoundHttpException('Task not found in selected project.');
                 }
-                $inspector['contracts'] = $this->db->fetchAllAssociative('SELECT version, document FROM task_contract WHERE task_id = ? ORDER BY version DESC LIMIT 25', [$filter->task]);
+                $inspector['contracts'] = $this->db->fetchAllAssociative('SELECT version, document FROM task_contract WHERE task_id = ? ORDER BY version DESC LIMIT 25 OFFSET '.$offset, [$filter->task]);
                 $inspector['events'] = $this->db->fetchAllAssociative('SELECT id, from_state, to_state, version, actor_id, created_at FROM state_event WHERE task_id = ? ORDER BY version DESC LIMIT 25 OFFSET '.$offset, [$filter->task]);
                 $inspector['receipts'] = $this->receipts('AND r.task_id = ?', [$project, $filter->task], $offset);
                 $inspector['git'] = $this->git->task($filter->task, self::PAGE_SIZE);
                 $inspector['provenance_graph'] = $this->provenanceGraph($filter->task, $inspector['git']['associations']);
+                $inspector['diagram'] = $this->graphs->layout($inspector['provenance_graph']);
             }
             $dependencies = $this->db->fetchAllAssociative('SELECT d.task_id, d.depends_on_id FROM task_dependency d JOIN task t ON t.id = d.task_id WHERE t.project_id = ? ORDER BY d.task_id, d.depends_on_id LIMIT 25 OFFSET '.$offset, [$project]);
-            $sessions = $this->db->fetchAllAssociative('SELECT s.id, a.name AS agent, s.created_at, s.last_heartbeat_at FROM agent_session s JOIN agent a ON a.id = s.agent_id WHERE EXISTS (SELECT 1 FROM task_lease l JOIN task t ON t.id = l.task_id WHERE l.session_id = s.id AND t.project_id = ?) ORDER BY s.last_heartbeat_at DESC, s.id LIMIT 25 OFFSET '.$offset, [$project]);
+            $sessions = $this->db->fetchAllAssociative('SELECT s.id, a.name AS agent, s.created_at, s.last_heartbeat_at FROM agent_session s JOIN agent a ON a.id = s.agent_id WHERE EXISTS (SELECT 1 FROM task_lease l JOIN task t ON t.id = l.task_id WHERE l.session_id = s.id AND t.project_id = ?) OR EXISTS (SELECT 1 FROM state_event e JOIN task t ON t.id = e.task_id WHERE e.metadata->>\'sessionId\' = s.id AND t.project_id = ?) OR EXISTS (SELECT 1 FROM completion_receipt r JOIN task t ON t.id = r.task_id WHERE r.session_id = s.id AND t.project_id = ?) ORDER BY s.last_heartbeat_at DESC, s.id LIMIT 25 OFFSET '.$offset, [$project, $project, $project]);
+            $sessionTimeline = $this->db->fetchAllAssociative("SELECT e.metadata->>'sessionId' AS session_id, e.task_id, e.actor_id, e.to_state, e.created_at FROM state_event e JOIN task t ON t.id = e.task_id WHERE t.project_id = ? AND e.metadata->>'sessionId' IS NOT NULL ORDER BY e.created_at DESC, e.id LIMIT 25 OFFSET ".$offset, [$project]);
             $repositories = $this->db->fetchAllAssociative('SELECT id, refs, observed_at FROM git_repository WHERE project_id = ? ORDER BY id LIMIT 25 OFFSET '.$offset, [$project]);
             foreach ($repositories as &$repository) {
                 $repository['events'] = $this->git->events($repository['id'], self::PAGE_SIZE);
                 $repository['graph'] = $this->git->graph($repository['id'], self::PAGE_SIZE);
+                $repository['diagram'] = $this->graphs->layout($repository['graph']['mermaid']);
             }
             unset($repository);
 
@@ -63,7 +67,8 @@ final class DashboardProjection
                 'has_next' => $hasNext, 'page_size' => self::PAGE_SIZE, 'kanban' => $kanban,
                 'task' => $inspector, 'dependencies' => $dependencies,
                 'dependency_graph' => $this->dependencyGraph($dependencies),
-                'sessions' => $sessions, 'repositories' => $repositories,
+                'dependency_diagram' => $this->graphs->layout($this->dependencyGraph($dependencies)),
+                'sessions' => $sessions, 'session_timeline' => $sessionTimeline, 'repositories' => $repositories,
                 'receipts' => $this->receipts('', [$project], $offset),
                 'jobs' => $this->runtime->jobs(self::PAGE_SIZE),
                 'queues' => $this->runtime->queues(), 'health' => $this->runtime->health(),

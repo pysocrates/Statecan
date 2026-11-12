@@ -4,6 +4,13 @@
 {% for row in rows %}<tr>{% for value in row %}<td>{% if value is iterable %}<pre>{{ value|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>{% else %}{{ value }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
 </tbody></table></div>{% endif %}
 {% endmacro %}
+{% macro diagram(graph, name) %}
+{% if graph.nodes is not empty %}<div class="scroll"><svg width="{{ graph.width }}" height="{{ graph.height }}" role="img" aria-label="{{ name }}">
+<defs><marker id="arrow-{{ name }}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#83c4ff"/></marker></defs>
+{% for edge in graph.edges %}{% set from = graph.nodes[edge.from] %}{% set to = graph.nodes[edge.to] %}<line x1="{{ from.x + 72 }}" y1="{{ from.y }}" x2="{{ to.x - 75 }}" y2="{{ to.y }}" stroke="#83c4ff" marker-end="url(#arrow-{{ name }})"/>{% endfor %}
+{% for id, node in graph.nodes %}<g><title>{{ id }}</title><rect x="{{ node.x - 72 }}" y="{{ node.y - 19 }}" width="144" height="38" rx="6" fill="#283b53" stroke="#83c4ff"/><text x="{{ node.x }}" y="{{ node.y + 5 }}" text-anchor="middle" fill="#e4eaf3" font-size="12">{{ node.label }}</text></g>{% endfor %}
+</svg></div>{% endif %}
+{% endmacro %}
 {% import _self as ui %}
 <h1>Operator dashboard</h1>
 <form action="{{ path('app_dashboard') }}" method="get"><label>Project <select name="project" onchange="this.form.submit()"><option value="">Select project</option>{% for project in snapshot.projects %}<option value="{{ project.id }}" {{ project.id == snapshot.project ? 'selected' : '' }}>{{ project.name }}</option>{% endfor %}</select></label><button>View</button></form>
@@ -15,11 +22,11 @@
 <details><summary>Versioned contracts</summary>{{ ui.table(snapshot.task.contracts) }}</details>
 <h3>State transition timeline</h3>{{ ui.table(snapshot.task.events) }}
 <h3>Task receipts</h3>{{ ui.table(snapshot.task.receipts) }}
-<h3>Task → commit provenance</h3><pre>{{ snapshot.task.provenance_graph }}</pre><pre>{{ snapshot.task.git|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+<h3>Task → commit provenance</h3>{{ ui.diagram(snapshot.task.diagram, "provenance") }}<pre>{{ snapshot.task.provenance_graph }}</pre><pre>{{ snapshot.task.git|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
 </section>{% endif %}
-<section><h2>Dependency graph</h2><p class="muted">Mermaid source, bounded to this history page. Arrows point from prerequisite to dependent task.</p><pre>{{ snapshot.dependency_graph }}</pre>{{ ui.table(snapshot.dependencies) }}</section>
-<section><h2>Agent sessions</h2>{{ ui.table(snapshot.sessions) }}</section>
-<section><h2>Git activity ledger and graphs</h2>{% for repository in snapshot.repositories %}<details open><summary>Repository {{ repository.id }} · observed {{ repository.observed_at|default('not yet') }}</summary><h3>Observed refs</h3><pre>{{ repository.refs }}</pre><h3>Ledger</h3><pre>{{ repository.events|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Commit graph · Mermaid source</h3><pre>{{ repository.graph is iterable ? repository.graph|json_encode(constant('JSON_PRETTY_PRINT')) : repository.graph }}</pre></details>{% else %}<p class="muted">No registered repositories.</p>{% endfor %}</section>
+<section><h2>Dependency graph</h2>{{ ui.diagram(snapshot.dependency_diagram, "dependencies") }}<p class="muted">Mermaid source, bounded to this history page. Arrows point from prerequisite to dependent task.</p><pre>{{ snapshot.dependency_graph }}</pre>{{ ui.table(snapshot.dependencies) }}</section>
+<section><h2>Agent sessions</h2>{{ ui.table(snapshot.sessions) }}<h3>Session activity timeline</h3>{{ ui.table(snapshot.session_timeline) }}</section>
+<section><h2>Git activity ledger and graphs</h2>{% for repository in snapshot.repositories %}<details open><summary>Repository {{ repository.id }} · observed {{ repository.observed_at|default('not yet') }}</summary><h3>Observed refs</h3><pre>{{ repository.refs }}</pre><h3>Ledger</h3><pre>{{ repository.events|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Commit graph · Mermaid source</h3>{{ ui.diagram(repository.diagram, repository.id) }}<pre>{{ repository.graph is iterable ? repository.graph|json_encode(constant('JSON_PRETTY_PRINT')) : repository.graph }}</pre></details>{% else %}<p class="muted">No registered repositories.</p>{% endfor %}</section>
 <section><h2>Historical receipts</h2><p class="muted">Pending attempts and verified evidence remain distinct. Hashes record integrity; storage policy provides immutability.</p>{{ ui.table(snapshot.receipts) }}{% for receipt in snapshot.receipts %}<p><a href="{{ path('api_observability_receipt', {id:receipt.id}) }}">Inspect canonical evidence · {{ receipt.id }}</a></p>{% endfor %}</section>
 <section><h2>Worker health</h2><pre>{{ snapshot.health|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Queues</h3><pre>{{ snapshot.queues|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Background jobs</h3><pre>{{ snapshot.jobs|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre></section>
 <section><h2>Live activity</h2><p>Notifications refresh this authoritative snapshot. <button type="button" id="refresh-now">Refresh now</button></p><ol id="activity-log" aria-live="polite"></ol></section>

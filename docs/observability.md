@@ -6,7 +6,7 @@ Agent bearer credentials do not grant operator permissions. Registration does no
 automatically grant operator access; use the existing operator provisioning flow.
 
 The server renders project selection, a paged Kanban board, task/contract inspector,
-state transitions, agent session heartbeats, dependency Mermaid source, indexed Git
+state transitions, agent session heartbeats, dependency/provenance diagrams and Mermaid source, indexed Git
 ledger/graphs, historical receipt verification metadata and global runtime health.
 Task and history data come from bounded PostgreSQL read projections; current task
 state comes directly from the task row. Each snapshot uses a short repeatable-read,
@@ -46,5 +46,8 @@ Worker liveness is displayed exactly as reported by RuntimeMonitor. Queue depth,
 job latency and failure status are observations, not proof that workers are alive.
 A pending completion attempt is visibly distinct from verified evidence. Displaying
 a stored hash does not assert that storage itself is immutable. Mermaid is provided
-as escaped source and indexed relationships; no untrusted graph code executes in
-the browser.
+as escaped source and indexed relationships, with bounded server-rendered SVG
+previews of the identifier-only graph subset. No untrusted graph code executes
+in the browser. Session timelines include persisted transitions linked by session ID,
+and retain historical sessions referenced by transitions or receipts. Receipt
+canonical bytes can be inspected at `/api/v1/observability/receipts/{id}`.
