@@ -118,6 +118,9 @@ final class CoreApiController extends AbstractController
 
     private function operatorTransition(string $id, string $target, int $version, Request $request, TaskTransitionService $transitions): JsonResponse
     {
+        if (!in_array($target, ['ready', 'blocked', 'failed', 'cancelled'], true)) {
+            return $this->json(['error' => 'conflict', 'message' => 'Operator target state is not permitted.'], 409);
+        }
         return $this->mutate($request, function () use ($id, $target, $version, $transitions): array {
             $task = $this->em->find(Task::class, $id, LockMode::PESSIMISTIC_WRITE) ?? throw $this->createNotFoundException();
             $this->em->refresh($task, LockMode::PESSIMISTIC_WRITE);
