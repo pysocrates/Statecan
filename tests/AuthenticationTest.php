@@ -8,6 +8,46 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 final class AuthenticationTest extends WebTestCase
 {
+    public function testOnlyFirstRegisteredAccountBecomesOperator(): void
+    {
+        $client = static::createClient();
+        $client->disableReboot();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $connection = $em->getConnection();
+        $connection->beginTransaction();
+
+        try {
+            // Temporarily start with no accounts; rollback restores existing test fixtures.
+            $connection->executeStatement('DELETE FROM app_user');
+            foreach (['first@example.test', 'second@example.test'] as $email) {
+                $crawler = $client->request('GET', '/register');
+                $client->submit($crawler->selectButton('Create account')->form([
+                    'email' => $email,
+                    'password' => 'long-test-password',
+                ]));
+                self::assertResponseRedirects('/login');
+            }
+
+            $first = $em->getRepository(User::class)->findOneBy(['email' => 'first@example.test']);
+            $second = $em->getRepository(User::class)->findOneBy(['email' => 'second@example.test']);
+            self::assertContains('ROLE_OPERATOR', $first->getRoles());
+            self::assertNotContains('ROLE_OPERATOR', $second->getRoles());
+
+            $crawler = $client->request('GET', '/login');
+            $client->submit($crawler->selectButton('Sign in')->form([
+                '_username' => 'first@example.test',
+                '_password' => 'long-test-password',
+            ]));
+            self::assertResponseRedirects();
+            $client->followRedirect();
+            self::assertResponseIsSuccessful();
+            self::assertSelectorExists('a[href="/dashboard"]');
+        } finally {
+            $connection->rollBack();
+            $em->clear();
+        }
+    }
+
     public function testRegistrationLoginAndLogout(): void
     {
         $client = static::createClient();

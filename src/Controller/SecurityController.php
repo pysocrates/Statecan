@@ -3,12 +3,12 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Security\UserRegistration;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
 
@@ -22,7 +22,7 @@ final class SecurityController extends AbstractController
     }
 
     #[Route('/register', name: 'app_register', methods: ['GET', 'POST'])]
-    public function register(Request $request, EntityManagerInterface $em, UserPasswordHasherInterface $hasher): Response
+    public function register(Request $request, EntityManagerInterface $em, UserRegistration $registration): Response
     {
         if ($this->getUser()) { return $this->redirectToRoute('app_home'); }
         $error = null;
@@ -39,12 +39,8 @@ final class SecurityController extends AbstractController
             } elseif ($em->getRepository(User::class)->findOneBy(['email' => $email])) {
                 $error = 'An account with that email already exists.';
             } else {
-                $user = new User();
-                $user->setEmail($email);
-                $user->setPassword($hasher->hashPassword($user, $password));
-                $em->persist($user);
                 try {
-                    $em->flush();
+                    $registration->register($email, $password);
                     $this->addFlash('success', 'Account created. Please sign in.');
                     return $this->redirectToRoute('app_login');
                 } catch (UniqueConstraintViolationException) {

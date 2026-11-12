@@ -8,7 +8,7 @@ The two original authentication migrations now branch on database platform: fres
 
 ## HTTP
 
-All routes are under `/api/v1`, require authentication, and return JSON. Read access is global to authenticated application principals; project membership/tenant authorization is not part of this phase. Writes require an explicitly provisioned `ROLE_OPERATOR`; registration does not grant it. Phase 3 supplies agent bearer credentials and fenced command endpoints. Operator task transitions accept form-authenticated operators; bearer requests are routed to the agent endpoint after integration.
+All routes are under `/api/v1`, require authentication, and return JSON. Read access is global to authenticated application principals; project membership/tenant authorization is not part of this phase. Writes require `ROLE_OPERATOR`: the first registered account receives it automatically; later accounts require an explicit operator grant. Phase 3 supplies agent bearer credentials and fenced command endpoints. Operator task transitions accept form-authenticated operators; bearer requests are routed to the agent endpoint after integration.
 
 Mutations require `Content-Type: application/json` when carrying a payload, plus `Idempotency-Key` (1–128 ASCII letters, digits, `.`, `_`, `:`, `-`). Each operator key is permanently bound to the request method, path and exact body bytes. Replays return the original body/status. Different requests with the same key receive `409`; simultaneous first attempts may receive `409` and should retry with the same key. Replay records are committed with domain changes.
 

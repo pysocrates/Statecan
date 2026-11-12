@@ -1,8 +1,10 @@
 # Agent API and receipts
 
-Run migrations, then register a form user normally and explicitly grant operator
-access with `php bin/console app:operator:grant user@example.org`. Public
-registration grants only ROLE_USER. Operator access uses the existing form login;
+Run migrations, then register the initial form user: the first account automatically
+receives ROLE_OPERATOR. Later registrations receive only ROLE_USER; grant additional
+operators with `php bin/console app:operator:grant user@example.org`.
+The initial-account decision is serialized with a PostgreSQL-backed Symfony lock.
+Operator access uses the existing form login;
 agents use a separate stateless bearer firewall and never receive operator roles.
 Provision agent credentials with `php bin/console app:agent:create 'build agent'`.
 The token is displayed once; store it securely. Only its SHA-256 digest is persisted.
