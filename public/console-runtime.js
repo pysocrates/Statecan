@@ -43,7 +43,7 @@
         const abort = () => controller.abort();
         signal?.addEventListener('abort', abort, {once: true});
         root.setAttribute('aria-busy', 'true');
-        root.querySelector('[data-runtime-refresh]').disabled = true;
+        root.querySelector('[data-runtime-refresh]').setAttribute('aria-disabled', 'true');
         root.querySelector('#runtime-refresh-status').textContent = 'Loading runtime observations…';
         try {
             const response = await fetch(root.dataset.runtimeFragment, {credentials: 'same-origin', cache: 'no-store', signal: controller.signal, headers: {'Accept': 'text/html'}});
@@ -52,7 +52,7 @@
                 sessionExpired();
                 return;
             }
-            if (!response.ok) throw new Error('unavailable');
+            if (!response.ok) throw new Error('Runtime observations are unavailable. Last data is retained; use Refresh runtime to retry.');
             const html = await response.text();
             const next = new DOMParser().parseFromString(html, 'text/html').getElementById('runtime-panel');
             if (!next) throw new Error('invalid response');
@@ -69,13 +69,15 @@
             scroll.forEach(item => { const node = document.getElementById(item.id); if (node) node.scrollTop = item.top; });
             if (focusId) document.getElementById(focusId)?.focus({preventScroll: true});
             else if (focusDetail) Array.from(next.querySelectorAll('[data-runtime-detail]')).find(node => node.dataset.runtimeDetail === focusDetail)?.querySelector('summary')?.focus({preventScroll: true});
-            document.dispatchEvent(new CustomEvent('statecan:component-updated', {detail: {component: 'runtime'}}));
+            if (!registered) document.dispatchEvent(new CustomEvent('statecan:component-updated', {detail: {component: 'runtime'}}));
+            return true;
         } catch (failure) {
             if (controller.signal.aborted) return;
             const error = root.querySelector('#runtime-error');
             error.textContent = 'Runtime observations could not be refreshed. Last data is retained and may be stale. Use Refresh runtime to retry.';
             error.hidden = false;
             root.querySelector('#runtime-refresh-status').textContent = 'Refresh failed · data may be stale';
+            throw failure;
         } finally {
             signal?.removeEventListener('abort', abort);
             if (active === controller) {
@@ -83,7 +85,7 @@
                 const current = panel();
                 current?.removeAttribute('aria-busy');
                 const button = current?.querySelector('[data-runtime-refresh]');
-                if (button) button.disabled = expired;
+                if (button) { button.disabled = expired; button.removeAttribute('aria-disabled'); }
             }
         }
     }
@@ -91,24 +93,28 @@
         if (!registered && window.StatecanConsole?.register) {
             window.StatecanConsole.register('runtime', {refresh});
             registered = true;
+            window.StatecanConsole.invalidate({components: ['runtime']});
         }
         applyFilter();
     }
     document.addEventListener('click', event => {
-        if (event.target.closest('[data-runtime-refresh]')) refresh();
+        if (event.target.closest('[data-runtime-refresh]') && !active) {
+            if (registered) window.StatecanConsole.invalidate({components: ['runtime']});
+            else refresh().catch(() => {});
+        }
         // Supports the preserved shell before Stage3 is integrated, without owning navigation.
-        if (!registered && event.target.closest('[data-view-link="runtime"]')) queueMicrotask(() => { if (visible() && panel().dataset.runtimeLoaded !== 'true') refresh(); });
+        if (!registered && event.target.closest('[data-view-link="runtime"]')) queueMicrotask(() => { if (visible() && panel().dataset.runtimeLoaded !== 'true') refresh().catch(() => {}); });
     });
     document.addEventListener('change', event => {
         if (event.target.id === 'runtime-job-filter') { filter = event.target.value; applyFilter(); }
     });
     document.addEventListener('statecan:view-change', event => {
         register();
-        if (event.detail?.view === 'runtime' && panel()?.dataset.runtimeLoaded !== 'true') refresh();
+        if (!registered && event.detail?.view === 'runtime' && panel()?.dataset.runtimeLoaded !== 'true') refresh().catch(() => {});
     });
     document.addEventListener('statecan:component-updated', register);
     document.addEventListener('statecan:session-expired', sessionExpired);
     window.addEventListener('pagehide', () => active?.abort(), {once: true});
     register();
-    if (visible() && panel()?.dataset.runtimeLoaded !== 'true') refresh();
+    if (!registered && visible() && panel()?.dataset.runtimeLoaded !== 'true') refresh().catch(() => {});
 })();
