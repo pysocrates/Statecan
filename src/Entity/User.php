@@ -17,12 +17,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column]
     private string $password;
 
+    #[ORM\Column(type: 'json')]
+    private array $roles = [];
+
+    public function grantOperator(): void { $this->roles = ['ROLE_OPERATOR']; }
+
     public function getId(): ?int { return $this->id; }
     public function getEmail(): string { return $this->email; }
     public function setEmail(string $email): void { $this->email = $email; }
     public function getUserIdentifier(): string { return $this->email; }
     public function getPassword(): string { return $this->password; }
     public function setPassword(string $password): void { $this->password = $password; }
-    public function getRoles(): array { return []; }
+    public function getRoles(): array { return array_values(array_unique([...$this->roles, 'ROLE_USER'])); }
     public function eraseCredentials(): void {}
 }
