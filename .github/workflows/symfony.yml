@@ -1,0 +1,128 @@
+name: Symfony CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: ${{ matrix.suite }} / PHP 8.5 / PostgreSQL 18
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [backend, browser]
+
+    env:
+      APP_ENV: test
+      APP_DEBUG: '1'
+      # Doctrine appends _test in config/packages/doctrine.yaml.
+      DATABASE_URL: 'postgresql://statecan:statecan@127.0.0.1:5432/statecan?serverVersion=18&charset=utf8'
+      PANTHER_APP_ENV: test
+      PHP_CLI_SERVER_WORKERS: '4'
+      # Isolated CI runner only; Panther defaults to headless Chrome.
+      PANTHER_NO_SANDBOX: '1'
+      PANTHER_CHROME_ARGUMENTS: '--disable-dev-shm-usage'
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: statecan
+          POSTGRES_PASSWORD: statecan
+          POSTGRES_DB: statecan_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U statecan -d statecan_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pdo_pgsql, pgsql, mbstring, iconv, intl, pcntl, curl, zip
+          coverage: none
+          tools: composer:v2
+        env:
+          fail-fast: true
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Apply test database migrations
+        run: php bin/console doctrine:migrations:migrate --env=test --no-interaction
+
+      - name: Run unit and integration tests
+        if: matrix.suite == 'backend'
+        run: php bin/phpunit --exclude-group browser
+
+      - name: Install Chrome and matching ChromeDriver
+        if: matrix.suite == 'browser'
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          install-chromedriver: true
+
+      - name: Make ChromeDriver available to Panther
+        if: matrix.suite == 'browser'
+        run: |
+          sudo ln -sf "${{ steps.chrome.outputs.chromedriver-path }}" /usr/local/bin/chromedriver
+          chromedriver --version
+          "${{ steps.chrome.outputs.chrome-path }}" --version
+
+      - name: Smoke-test headless Chrome startup
+        if: matrix.suite == 'browser'
+        env:
+          CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          mkdir -p var/ci-browser
+          set +e
+          timeout 25s "$CHROME_BINARY" \
+            --headless --no-sandbox --disable-dev-shm-usage \
+            --disable-gpu --disable-extensions \
+            --dump-dom about:blank \
+            >var/ci-browser/chrome-smoke.html \
+            2>var/ci-browser/chrome-stderr.log
+          result=$?
+          set -e
+          if [ "$result" -ne 0 ]; then
+            cat var/ci-browser/chrome-stderr.log
+            echo "::error::Headless Chrome smoke test failed (exit $result)"
+            exit "$result"
+          fi
+          echo "Chrome headless startup succeeded"
+
+      - name: Run Panther browser tests
+        if: matrix.suite == 'browser'
+        env:
+          PANTHER_CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+          PANTHER_WEB_SERVER_PORT: '9095'
+        run: php bin/phpunit --group browser
+
+      - name: Upload browser failure screenshots
+        if: failure() && matrix.suite == 'browser'
+        uses: actions/upload-artifact@v4
+        with:
+          name: panther-failure-artifacts
+          path: |
+            var/error-screenshots/
+            var/console-qa/
+            var/console-screenshots/
+            var/ci-browser/
+          if-no-files-found: ignore
+          retention-days: 7
