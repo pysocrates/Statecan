@@ -1,0 +1,22 @@
+{% import 'observability/_components.html.twig' as ui %}
+{% set ops = snapshot.operations %}
+<div data-console-component="work" data-component-url="{{ path('app_dashboard') }}/components/work?{{ {project:snapshot.project,page:snapshot.page}|url_encode }}">
+    <div class="section-intro"><p>All backend states, grouped for supervision. Original status badges retain their meaning.</p><span class="muted">Page {{ snapshot.page + 1 }} · up to {{ snapshot.page_size }} tasks</span></div>
+    <div class="board" aria-label="Kanban">
+        {% for key, label in {ready:'Ready', progress:'In progress', attention:'Attention', done:'Done'} %}
+        <section class="column column-{{ key }}" aria-labelledby="column-{{ key }}"><div class="column-heading"><h2 id="column-{{ key }}">{{ label }}</h2><span class="count" title="Project-wide total">{{ ops.group_counts[key] }}</span></div>
+            <p class="column-description">{{ {ready:'Backlog and ready; only ready tasks can be claimed.', progress:'Claimed, running, or waiting for evidence.', attention:'Blocked, failed, or waiting for human review.', done:'Completed or cancelled; original status retained.'}[key] }}</p>
+            <div class="column-tasks" tabindex="0" aria-label="{{ label }} tasks">
+            {% for task in snapshot.work_groups[key] %}<article class="task-card"><span class="status status-{{ task.status }}">{{ task.status|replace({'_':' '}) }}</span><h3><a title="{{ task.title }}" href="{{ path('app_dashboard', {project:snapshot.project, task:task.id, page:snapshot.page}) }}#work">{{ task.title }}</a></h3><p class="task-agent">{{ task.agent|default('Unassigned') }}</p><footer><small>v{{ task.version }} · contract {{ task.contract_version }}</small>{% if task.lease_expired and task.status in ['claimed','running','blocked','awaiting_review'] %}<span class="warning-text">Lease expired</span>{% elseif task.status == 'completion_pending_evidence' %}<span class="muted">Evidence pending</span>{% endif %}</footer></article>{% else %}<p class="empty-state">No {{ label|lower }} tasks on this page.</p>{% endfor %}
+            </div>
+        </section>{% endfor %}
+    </div>
+    <nav class="pagination" aria-label="Work pages">{% if snapshot.page > 0 %}<a href="{{ path('app_dashboard', {project:snapshot.project, task:snapshot.task.id|default(null), page:snapshot.page - 1}) }}#work">← Previous</a>{% endif %}<span>Page {{ snapshot.page + 1 }}</span>{% if snapshot.has_next %}<a href="{{ path('app_dashboard', {project:snapshot.project, task:snapshot.task.id|default(null), page:snapshot.page + 1}) }}#work">Next →</a>{% endif %}</nav>
+{% if snapshot.task %}
+<section id="task-inspector"><h2>Task inspector · {{ snapshot.task.title }}</h2><p>{{ snapshot.task.id }} · {{ snapshot.task.status }} · version {{ snapshot.task.version }}</p>
+<details><summary>Versioned contracts</summary>{{ ui.table(snapshot.task.contracts) }}</details>
+<h3>State transition timeline</h3>{{ ui.table(snapshot.task.events) }}
+<h3>Task receipts</h3>{{ ui.table(snapshot.task.receipts) }}
+<h3>Task → commit provenance</h3>{{ ui.diagram(snapshot.task.diagram, "provenance") }}<pre>{{ snapshot.task.provenance_graph }}</pre><pre>{{ snapshot.task.git|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+</section>{% endif %}
+</div>

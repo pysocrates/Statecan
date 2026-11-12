@@ -1,0 +1,38 @@
+{% set ops = snapshot.operations %}
+{% set backlog = 0 %}{% for queue in snapshot.queues %}{% if queue.queue != 'failed' %}{% set backlog = backlog + queue.depth %}{% endif %}{% endfor %}
+{% set issues = [] %}
+{% if snapshot.health.missing_worker_queues|default([]) is not empty %}{% set issues = issues|merge([{title:'Worker coverage missing', detail:snapshot.health.missing_worker_queues|join(', ')}]) %}{% endif %}
+{% if snapshot.health.stalled_jobs|default(0) > 0 %}{% set issues = issues|merge([{title:'Stalled background work', detail:snapshot.health.stalled_jobs ~ ' processing jobs need investigation'}]) %}{% endif %}
+{% if snapshot.health.outbox_stalled|default(false) %}{% set issues = issues|merge([{title:'Outbox dispatch stalled', detail:snapshot.health.pending_outbox ~ ' unpublished events'}]) %}{% endif %}
+{% if snapshot.health.dead_letters|default(0) > 0 or snapshot.health.failed_jobs|default(0) > 0 %}{% set issues = issues|merge([{title:'Background failures', detail:snapshot.health.failed_jobs ~ ' failed jobs · ' ~ snapshot.health.dead_letters ~ ' dead letters'}]) %}{% endif %}
+{% if snapshot.health.stalled_queues|default([]) is not empty %}{% set issues = issues|merge([{title:'Queue backlog overdue', detail:snapshot.health.stalled_queues|join(', ')}]) %}{% endif %}
+<div data-console-component="operations" data-component-url="{{ path('app_dashboard') }}/components/operations?{{ {project:snapshot.project,page:snapshot.page}|url_encode }}">
+    <dl class="metrics">
+        <div><dt title="Agents with a live project lease and a session heartbeat within five minutes">Active agents</dt><dd>{{ ops.active_agents }}</dd></div>
+        <div><dt>Open tasks</dt><dd>{{ ops.open_tasks }}</dd></div>
+        <div class="{{ ops.attention_count + issues|length > 0 ? 'metric-attention' : '' }}"><dt title="Tasks needing attention plus system issue categories">Operator attention</dt><dd>{{ ops.attention_count + issues|length }}</dd></div>
+        <div><dt>Failed jobs <span class="scope-dot" title="All projects">●</span></dt><dd>{{ snapshot.health.failed_jobs }}</dd></div>
+        <div><dt title="Normal queue depth, including delayed and in-flight messages, across all projects">Queue backlog</dt><dd>{{ backlog }}</dd></div>
+        <div><dt>Queue coverage</dt><dd class="metric-text">{{ 5 - snapshot.health.missing_worker_queues|default([])|length }}<span> / 5</span></dd></div>
+    </dl>
+    <div class="operations-grid">
+        <section class="panel attention-panel" aria-labelledby="attention-heading"><div class="panel-heading"><h2 id="attention-heading">Needs attention</h2><span class="count">{{ ops.attention_count + issues|length }}</span></div>
+            <div class="attention-list">
+                {% for task in ops.attention %}<a class="attention-row" href="{{ path('app_dashboard', {project:snapshot.project, task:task.id}) }}#work"><span class="severity" aria-hidden="true">!</span><span><strong>{{ task.title }}</strong><small>{{ task.agent|default('Unassigned') }} · <span class="status status-{{ task.status }}">{{ task.status|replace({'_':' '}) }}</span></small></span><span aria-hidden="true">↗</span></a>{% endfor %}
+                {% for issue in issues %}<a class="attention-row system-issue" href="#runtime" data-view-link="runtime"><span class="severity" aria-hidden="true">!</span><span><strong>{{ issue.title }}</strong><small>{{ issue.detail }}</small></span><span aria-hidden="true">↗</span></a>{% endfor %}
+                {% if issues is empty and ops.attention is empty %}<p class="empty-state">No intervention required in this project or monitored runtime.</p>{% endif %}
+            </div>
+            {% if ops.attention_count > 6 %}<p class="panel-footnote">Showing six attention tasks. <a href="#work" data-view-link="work">Review the Work board</a> for paged tasks.</p>{% endif %}
+        </section>
+        <section class="panel running-panel" aria-labelledby="running-heading"><div class="panel-heading"><h2 id="running-heading">Active work</h2><span class="count">{{ ops.group_counts.progress }}</span></div>
+            <div class="compact-list">{% for task in ops.running %}<a class="work-row" href="{{ path('app_dashboard', {project:snapshot.project, task:task.id}) }}#work"><strong>{{ task.title }}</strong><small>{{ task.agent|default('Unassigned') }} <span class="status status-{{ task.status }}">{{ task.status|replace({'_':' '}) }}</span></small></a>{% else %}<p class="empty-state">No tasks are in progress. Ready work will appear here when an agent claims it.</p>{% endfor %}</div>
+        </section>
+        <section class="panel activity-panel" aria-labelledby="activity-heading"><div class="panel-heading"><h2 id="activity-heading">Recent task activity</h2><span class="muted">Latest 8</span></div>
+            <ol class="event-list" id="activity-log">{% for event in ops.activity %}<li><span class="event-dot" aria-hidden="true"></span><div><a href="{{ path('app_dashboard', {project:snapshot.project, task:event.task_id}) }}#work">{{ event.title }}</a><small><span class="status status-{{ event.to_state }}">{{ event.to_state|replace({'_':' '}) }}</span> <time datetime="{{ event.created_at|date('c', 'UTC') }}">{{ event.created_at|date('M j H:i:s', 'UTC') }} UTC</time></small></div></li>{% else %}<li class="empty-state">No recorded task transitions yet.</li>{% endfor %}</ol>
+        </section>
+        <section class="panel availability-panel" aria-labelledby="availability-heading"><div class="panel-heading"><h2 id="availability-heading">Worker availability</h2><span class="status {{ snapshot.health.worker_liveness == 'ok' ? 'status-completed' : 'status-blocked' }}">{{ snapshot.health.worker_liveness }}</span></div>
+            <ul class="worker-summary">{% for queue in snapshot.queues %}{% if queue.queue != 'failed' %}<li><span>{{ queue.queue|replace({'_':' '}) }}</span><strong class="{{ queue.live_workers == 0 ? 'warning-text' : '' }}">{{ queue.live_workers }} fresh</strong></li>{% endif %}{% endfor %}</ul>
+            <p class="panel-footnote">Fresh heartbeat ≤ {{ snapshot.health.worker_ttl_seconds }}s. A heartbeat indicates responsiveness, not useful progress. <a href="#runtime" data-view-link="runtime">Runtime details</a></p>
+        </section>
+    </div>
+</div>
