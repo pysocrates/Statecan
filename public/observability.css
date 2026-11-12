@@ -123,7 +123,7 @@ summary { cursor: pointer; }
 }
 @media (max-width: 1024px) {
     .compact-account { display: inline-flex; align-items: center; min-height: 36px; padding: .3rem; font-size: .8rem; }
-    .console-shell { grid-template-columns: minmax(0, 1fr); }
+    .console-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content minmax(0, 1fr); }
     .console-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: .4rem .8rem; border-right: 0; border-bottom: 1px solid var(--line); }
     .console-nav a { text-align: center; padding: .65rem .2rem; }
     .console-nav .account-link { display: none; }

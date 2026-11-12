@@ -11,7 +11,7 @@ Statecan records and governs work performed elsewhere. It does not run LLMs, pla
 - PostgreSQL-backed Messenger queues, a transactional outbox, retries, failed-message inspection, and job/queue status.
 - Asynchronous completion receipts with deterministic JSON, SHA-256 verification, recoverable storage writes, and reconciliation.
 - Read-only indexing of trusted local Git repositories, observed refs, commits, file changes, and task/session trailer associations.
-- A responsive operator console with an Operations overview, four-group Work board, task details, timelines, receipt inspection, Git graphs, and SSE refresh notifications.
+- A responsive operator console with an Operations overview, four-group Work board, contextual task inspection, searchable history, interactive Git graphs, structured runtime monitoring, and targeted SSE-driven updates.
 - systemd templates for workers, outbox dispatch, lease recovery, and receipt reconciliation.
 
 ## Requirements
@@ -246,7 +246,7 @@ The initial v1 verification run passed **10 tests and 113 assertions**, includin
 - [Agent credentials, leases, receipts, and reconciliation](docs/agent-api.md)
 - [Git indexing and provenance](docs/git.md)
 - [Dashboard projections and live refresh](docs/observability.md)
-- [Operations console Stage 1 and browser tests](docs/operations-console.md)
+- [Operations console and browser tests](docs/operations-console.md)
 - [Repository engineering conventions](AGENTS.md)
 
 The Composer manifest declares this project proprietary; no separate open-source license is included.

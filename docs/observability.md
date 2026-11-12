@@ -1,9 +1,9 @@
 # Human observability
 
 The console opens in Operations, with local navigation to Work, Git, History and
-Runtime. See [Stage 1 layout, status mappings and browser checks](operations-console.md).
-The contextual inspector, targeted updates and detailed view redesigns remain
-separate later stages.
+Runtime. See [console views, task inspection, scoped updates and browser checks](operations-console.md).
+The contextual inspector remains mounted across view/component refreshes. Git,
+History and Runtime use their own focused authoritative endpoints.
 
 Sign in through the existing form login using an account granted `ROLE_OPERATOR`
 (or `ROLE_ADMIN` through the shared role hierarchy), then open `/dashboard`.
@@ -15,8 +15,8 @@ The server renders project selection, a paged Kanban board, task/contract inspec
 state transitions, agent session heartbeats, dependency/provenance diagrams and Mermaid source, indexed Git
 ledger/graphs, historical receipt verification metadata and global runtime health.
 Task and history data come from bounded PostgreSQL read projections; current task
-state comes directly from the task row. Each snapshot uses a short repeatable-read,
-read-only transaction. Git and runtime views delegate to their owning services.
+state comes directly from the task row. The compatibility snapshot uses a short repeatable-read,
+read-only transaction; interactive refreshes use focused read projections. Git and runtime views delegate to their owning services.
 No Git commands, receipt writes or other external work happen during these reads.
 
 Operator-only routes:
@@ -43,10 +43,10 @@ transaction coalesce; pending notifications are drained before one snapshot read
 No task data, credentials or user input is sent in the PostgreSQL notification.
 
 Each authorized stream creates a dedicated, nonpersistent PDO PostgreSQL connection,
-commits LISTEN before reading the initial snapshot, and then blocks waiting for
-notifications. The listener never holds an open transaction. A notification causes
-a fresh authoritative snapshot; a changed revision produces a refresh event on the
-existing HTTP connection. Idle streams send comment heartbeats every ten seconds,
+commits LISTEN before reading the initial revision context, and then blocks waiting for
+notifications. The listener never holds an open transaction. A notification carries bounded entity/component revision hints and produces a
+refresh event on the existing HTTP connection. The browser then fetches only the
+affected visible authoritative component; stream wakeups do not build snapshots. Idle streams send comment heartbeats every ten seconds,
 without querying snapshots. Reconnects still refresh authoritative HTML to recover
 changes missed while disconnected; notifications are transient, not a durable ledger.
 `Last-Event-ID` suppresses an unchanged initial invalidation, not the recovery read.
