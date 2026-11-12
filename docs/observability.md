@@ -1,5 +1,10 @@
 # Human observability
 
+The console opens in Operations, with local navigation to Work, Git, History and
+Runtime. See [Stage 1 layout, status mappings and browser checks](operations-console.md).
+The contextual inspector, targeted updates and detailed view redesigns remain
+separate later stages.
+
 Sign in through the existing form login using an account granted `ROLE_OPERATOR`
 (or `ROLE_ADMIN` through the shared role hierarchy), then open `/dashboard`.
 Agent bearer credentials do not grant operator permissions. The first registered

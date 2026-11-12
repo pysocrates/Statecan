@@ -11,7 +11,7 @@ Statecan records and governs work performed elsewhere. It does not run LLMs, pla
 - PostgreSQL-backed Messenger queues, a transactional outbox, retries, failed-message inspection, and job/queue status.
 - Asynchronous completion receipts with deterministic JSON, SHA-256 verification, recoverable storage writes, and reconciliation.
 - Read-only indexing of trusted local Git repositories, observed refs, commits, file changes, and task/session trailer associations.
-- A server-rendered operator dashboard with Kanban, task details, timelines, receipt inspection, Git graphs, and SSE refresh notifications.
+- A responsive operator console with an Operations overview, four-group Work board, task details, timelines, receipt inspection, Git graphs, and SSE refresh notifications.
 - systemd templates for workers, outbox dispatch, lease recovery, and receipt reconciliation.
 
 ## Requirements
@@ -23,6 +23,7 @@ Statecan records and governs work performed elsewhere. It does not run LLMs, pla
 | PostgreSQL | Authoritative database and queue storage; verified with PostgreSQL 18 |
 | PHP extensions | Composer platform requirements, plus `pdo_pgsql`; `pcntl` for worker signal handling |
 | Git | Required for repository indexing |
+| Chromium + ChromeDriver | Required only for the Panther browser tests |
 | Symfony CLI | Optional; convenient for the development server |
 | systemd | Optional for development; supplied deployment templates target Linux/systemd |
 
@@ -245,6 +246,7 @@ The initial v1 verification run passed **10 tests and 113 assertions**, includin
 - [Agent credentials, leases, receipts, and reconciliation](docs/agent-api.md)
 - [Git indexing and provenance](docs/git.md)
 - [Dashboard projections and live refresh](docs/observability.md)
+- [Operations console Stage 1 and browser tests](docs/operations-console.md)
 - [Repository engineering conventions](AGENTS.md)
 
 The Composer manifest declares this project proprietary; no separate open-source license is included.

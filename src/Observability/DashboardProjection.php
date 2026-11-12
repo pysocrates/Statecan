@@ -18,6 +18,7 @@ final class DashboardProjection
         private readonly RuntimeMonitor $runtime,
         private readonly GitQuery $git,
         private readonly GraphPreview $graphs,
+        private readonly OperationsOverview $overview,
     ) {
     }
 
@@ -31,12 +32,18 @@ final class DashboardProjection
                 throw new NotFoundHttpException('Project not found.');
             }
             $offset = $filter->page * self::PAGE_SIZE;
-            $tasks = $this->db->fetchAllAssociative('SELECT id, title, status, version, contract_version FROM task WHERE project_id = ? ORDER BY id LIMIT 26 OFFSET '.$offset, [$project]);
+            $tasks = $this->db->fetchAllAssociative("SELECT t.id, t.title, t.status, t.version, t.contract_version, a.name AS agent, l.expires_at AS lease_expires_at, l.expires_at <= CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AS lease_expired FROM task t LEFT JOIN task_lease l ON l.task_id = t.id LEFT JOIN agent_session s ON s.id = l.session_id LEFT JOIN agent a ON a.id = s.agent_id WHERE t.project_id = ? ORDER BY t.id LIMIT 26 OFFSET ".$offset, [$project]);
             $hasNext = count($tasks) > self::PAGE_SIZE;
             $tasks = array_slice($tasks, 0, self::PAGE_SIZE);
             $kanban = array_fill_keys(self::STATES, []);
             foreach ($tasks as $task) {
                 $kanban[$task['status']][] = $task;
+            }
+            $workGroups = array_fill_keys(array_keys(OperationsOverview::GROUPS), []);
+            foreach (OperationsOverview::GROUPS as $group => $states) {
+                foreach ($states as $state) {
+                    array_push($workGroups[$group], ...$kanban[$state]);
+                }
             }
             $inspector = null;
             if (null !== $filter->task) {
@@ -65,6 +72,7 @@ final class DashboardProjection
             return [
                 'projects' => $projects, 'project' => $project, 'page' => $filter->page,
                 'has_next' => $hasNext, 'page_size' => self::PAGE_SIZE, 'kanban' => $kanban,
+                'work_groups' => $workGroups, 'operations' => $this->overview->read($project),
                 'task' => $inspector, 'dependencies' => $dependencies,
                 'dependency_graph' => $this->dependencyGraph($dependencies),
                 'dependency_diagram' => $this->graphs->layout($this->dependencyGraph($dependencies)),

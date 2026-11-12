@@ -1,22 +1,60 @@
-{% macro table(rows) %}
-{% if rows is empty %}<p class="muted">No observations yet.</p>{% else %}
-<div class="scroll"><table><thead><tr>{% for key in rows|first|keys %}<th>{{ key|replace({'_':' '}) }}</th>{% endfor %}</tr></thead><tbody>
-{% for row in rows %}<tr>{% for value in row %}<td>{% if value is iterable %}<pre>{{ value|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>{% else %}{{ value }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
-</tbody></table></div>{% endif %}
-{% endmacro %}
-{% macro diagram(graph, name) %}
-{% if graph.nodes is not empty %}<div class="scroll"><svg width="{{ graph.width }}" height="{{ graph.height }}" role="img" aria-label="{{ name }}">
-<defs><marker id="arrow-{{ name }}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#83c4ff"/></marker></defs>
-{% for edge in graph.edges %}{% set from = graph.nodes[edge.from] %}{% set to = graph.nodes[edge.to] %}<line x1="{{ from.x + 72 }}" y1="{{ from.y }}" x2="{{ to.x - 75 }}" y2="{{ to.y }}" stroke="#83c4ff" marker-end="url(#arrow-{{ name }})"/>{% endfor %}
-{% for id, node in graph.nodes %}<g><title>{{ id }}</title><rect x="{{ node.x - 72 }}" y="{{ node.y - 19 }}" width="144" height="38" rx="6" fill="#283b53" stroke="#83c4ff"/><text x="{{ node.x }}" y="{{ node.y + 5 }}" text-anchor="middle" fill="#e4eaf3" font-size="12">{{ node.label }}</text></g>{% endfor %}
-</svg></div>{% endif %}
-{% endmacro %}
-{% import _self as ui %}
-<h1>Operator dashboard</h1>
-<form action="{{ path('app_dashboard') }}" method="get"><label>Project <select name="project" onchange="this.form.submit()"><option value="">Select project</option>{% for project in snapshot.projects %}<option value="{{ project.id }}" {{ project.id == snapshot.project ? 'selected' : '' }}>{{ project.name }}</option>{% endfor %}</select></label><button>View</button></form>
-<p class="muted">Authoritative snapshot · page {{ snapshot.page + 1 }} · up to {{ snapshot.page_size }} rows per history{% if snapshot.has_next %} · more tasks on next page{% endif %}. Worker health is global; activity is scoped to the selected project.</p>
-<nav aria-label="History pages">{% if snapshot.page > 0 %}<a href="{{ path('app_dashboard', {project:snapshot.project, task: snapshot.task.id|default(null), page:snapshot.page - 1}) }}">← Previous</a>{% endif %} <a href="{{ path('app_dashboard', {project:snapshot.project, task:snapshot.task.id|default(null), page:snapshot.page + 1}) }}">Next histories →</a></nav>
-<section aria-label="Kanban"><h2>Kanban</h2><div class="board">{% for state, tasks in snapshot.kanban %}<section class="column"><h3>{{ state|replace({'_':' '}) }}</h3>{% for task in tasks %}<article><a href="{{ path('app_dashboard', {project:snapshot.project, task:task.id}) }}">{{ task.title }}</a><small>Version {{ task.version }} · contract {{ task.contract_version }}</small></article>{% else %}<p class="muted">No tasks on this page</p>{% endfor %}</section>{% endfor %}</div></section>
+{% import 'observability/_components.html.twig' as ui %}
+{% set ops = snapshot.operations %}
+{% set initial = snapshot.task ? 'work' : 'operations' %}
+{% set backlog = 0 %}{% for queue in snapshot.queues %}{% if queue.queue != 'failed' %}{% set backlog = backlog + queue.depth %}{% endif %}{% endfor %}
+{% set issues = [] %}
+{% if snapshot.health.missing_worker_queues|default([]) is not empty %}{% set issues = issues|merge([{title:'Worker coverage missing', detail:snapshot.health.missing_worker_queues|join(', ')}]) %}{% endif %}
+{% if snapshot.health.stalled_jobs|default(0) > 0 %}{% set issues = issues|merge([{title:'Stalled background work', detail:snapshot.health.stalled_jobs ~ ' processing jobs need investigation'}]) %}{% endif %}
+{% if snapshot.health.outbox_stalled|default(false) %}{% set issues = issues|merge([{title:'Outbox dispatch stalled', detail:snapshot.health.pending_outbox ~ ' unpublished events'}]) %}{% endif %}
+{% if snapshot.health.dead_letters|default(0) > 0 or snapshot.health.failed_jobs|default(0) > 0 %}{% set issues = issues|merge([{title:'Background failures', detail:snapshot.health.failed_jobs ~ ' failed jobs · ' ~ snapshot.health.dead_letters ~ ' dead letters'}]) %}{% endif %}
+{% if snapshot.health.stalled_queues|default([]) is not empty %}{% set issues = issues|merge([{title:'Queue backlog overdue', detail:snapshot.health.stalled_queues|join(', ')}]) %}{% endif %}
+<div class="project-toolbar">
+    <form action="{{ path('app_dashboard') }}" method="get"><label for="project-select">Project</label><select id="project-select" name="project"><option value="">Select project</option>{% for project in snapshot.projects %}<option value="{{ project.id }}" {{ project.id == snapshot.project ? 'selected' : '' }}>{{ project.name }}</option>{% endfor %}</select><button>Apply</button></form>
+    <span class="scope-note">Tasks: selected project · Runtime: all projects</span>
+</div>
+{% if snapshot.projects is empty %}<div class="notice">No projects yet. Create a project and tasks through the authorized API to start observing work. <a href="{{ path('api_observability_snapshot') }}">Inspect available data</a></div>{% endif %}
+<section id="view-operations" data-console-view="operations" aria-label="Operations" {{ initial != 'operations' ? 'hidden' : '' }}>
+    <dl class="metrics">
+        <div><dt title="Agents with a live project lease and a session heartbeat within five minutes">Active agents</dt><dd>{{ ops.active_agents }}</dd></div>
+        <div><dt>Open tasks</dt><dd>{{ ops.open_tasks }}</dd></div>
+        <div class="{{ ops.attention_count + issues|length > 0 ? 'metric-attention' : '' }}"><dt title="Tasks needing attention plus system issue categories">Operator attention</dt><dd>{{ ops.attention_count + issues|length }}</dd></div>
+        <div><dt>Failed jobs <span class="scope-dot" title="All projects">●</span></dt><dd>{{ snapshot.health.failed_jobs }}</dd></div>
+        <div><dt title="Normal queue depth, including delayed and in-flight messages, across all projects">Queue backlog</dt><dd>{{ backlog }}</dd></div>
+        <div><dt>Queue coverage</dt><dd class="metric-text">{{ 5 - snapshot.health.missing_worker_queues|default([])|length }}<span> / 5</span></dd></div>
+    </dl>
+    <div class="operations-grid">
+        <section class="panel attention-panel" aria-labelledby="attention-heading"><div class="panel-heading"><h2 id="attention-heading">Needs attention</h2><span class="count">{{ ops.attention_count + issues|length }}</span></div>
+            <div class="attention-list">
+                {% for task in ops.attention %}<a class="attention-row" href="{{ path('app_dashboard', {project:snapshot.project, task:task.id}) }}#work"><span class="severity" aria-hidden="true">!</span><span><strong>{{ task.title }}</strong><small>{{ task.agent|default('Unassigned') }} · <span class="status status-{{ task.status }}">{{ task.status|replace({'_':' '}) }}</span></small></span><span aria-hidden="true">↗</span></a>{% endfor %}
+                {% for issue in issues %}<a class="attention-row system-issue" href="#runtime" data-view-link="runtime"><span class="severity" aria-hidden="true">!</span><span><strong>{{ issue.title }}</strong><small>{{ issue.detail }}</small></span><span aria-hidden="true">↗</span></a>{% endfor %}
+                {% if issues is empty and ops.attention is empty %}<p class="empty-state">No intervention required in this project or monitored runtime.</p>{% endif %}
+            </div>
+            {% if ops.attention_count > 6 %}<p class="panel-footnote">Showing six attention tasks. <a href="#work" data-view-link="work">Review the Work board</a> for paged tasks.</p>{% endif %}
+        </section>
+        <section class="panel running-panel" aria-labelledby="running-heading"><div class="panel-heading"><h2 id="running-heading">Active work</h2><span class="count">{{ ops.group_counts.progress }}</span></div>
+            <div class="compact-list">{% for task in ops.running %}<a class="work-row" href="{{ path('app_dashboard', {project:snapshot.project, task:task.id}) }}#work"><strong>{{ task.title }}</strong><small>{{ task.agent|default('Unassigned') }} <span class="status status-{{ task.status }}">{{ task.status|replace({'_':' '}) }}</span></small></a>{% else %}<p class="empty-state">No tasks are in progress. Ready work will appear here when an agent claims it.</p>{% endfor %}</div>
+        </section>
+        <section class="panel activity-panel" aria-labelledby="activity-heading"><div class="panel-heading"><h2 id="activity-heading">Recent task activity</h2><span class="muted">Latest 8</span></div>
+            <ol class="event-list" id="activity-log">{% for event in ops.activity %}<li><span class="event-dot" aria-hidden="true"></span><div><a href="{{ path('app_dashboard', {project:snapshot.project, task:event.task_id}) }}#work">{{ event.title }}</a><small><span class="status status-{{ event.to_state }}">{{ event.to_state|replace({'_':' '}) }}</span> <time datetime="{{ event.created_at|date('c', 'UTC') }}">{{ event.created_at|date('M j H:i:s', 'UTC') }} UTC</time></small></div></li>{% else %}<li class="empty-state">No recorded task transitions yet.</li>{% endfor %}</ol>
+        </section>
+        <section class="panel availability-panel" aria-labelledby="availability-heading"><div class="panel-heading"><h2 id="availability-heading">Worker availability</h2><span class="status {{ snapshot.health.worker_liveness == 'ok' ? 'status-completed' : 'status-blocked' }}">{{ snapshot.health.worker_liveness }}</span></div>
+            <ul class="worker-summary">{% for queue in snapshot.queues %}{% if queue.queue != 'failed' %}<li><span>{{ queue.queue|replace({'_':' '}) }}</span><strong class="{{ queue.live_workers == 0 ? 'warning-text' : '' }}">{{ queue.live_workers }} fresh</strong></li>{% endif %}{% endfor %}</ul>
+            <p class="panel-footnote">Fresh heartbeat ≤ {{ snapshot.health.worker_ttl_seconds }}s. A heartbeat indicates responsiveness, not useful progress. <a href="#runtime" data-view-link="runtime">Runtime details</a></p>
+        </section>
+    </div>
+</section>
+<section id="view-work" data-console-view="work" aria-label="Work" {{ initial != 'work' ? 'hidden' : '' }}>
+    <div class="section-intro"><p>All backend states, grouped for supervision. Original status badges retain their meaning.</p><span class="muted">Page {{ snapshot.page + 1 }} · up to {{ snapshot.page_size }} tasks</span></div>
+    <div class="board" aria-label="Kanban">
+        {% for key, label in {ready:'Ready', progress:'In progress', attention:'Attention', done:'Done'} %}
+        <section class="column column-{{ key }}" aria-labelledby="column-{{ key }}"><div class="column-heading"><h2 id="column-{{ key }}">{{ label }}</h2><span class="count" title="Project-wide total">{{ ops.group_counts[key] }}</span></div>
+            <p class="column-description">{{ {ready:'Backlog and ready; only ready tasks can be claimed.', progress:'Claimed, running, or waiting for evidence.', attention:'Blocked, failed, or waiting for human review.', done:'Completed or cancelled; original status retained.'}[key] }}</p>
+            <div class="column-tasks" tabindex="0" aria-label="{{ label }} tasks">
+            {% for task in snapshot.work_groups[key] %}<article class="task-card"><span class="status status-{{ task.status }}">{{ task.status|replace({'_':' '}) }}</span><h3><a title="{{ task.title }}" href="{{ path('app_dashboard', {project:snapshot.project, task:task.id, page:snapshot.page}) }}#work">{{ task.title }}</a></h3><p class="task-agent">{{ task.agent|default('Unassigned') }}</p><footer><small>v{{ task.version }} · contract {{ task.contract_version }}</small>{% if task.lease_expired and task.status in ['claimed','running','blocked','awaiting_review'] %}<span class="warning-text">Lease expired</span>{% elseif task.status == 'completion_pending_evidence' %}<span class="muted">Evidence pending</span>{% endif %}</footer></article>{% else %}<p class="empty-state">No {{ label|lower }} tasks on this page.</p>{% endfor %}
+            </div>
+        </section>{% endfor %}
+    </div>
+    <nav class="pagination" aria-label="Work pages">{% if snapshot.page > 0 %}<a href="{{ path('app_dashboard', {project:snapshot.project, task:snapshot.task.id|default(null), page:snapshot.page - 1}) }}#work">← Previous</a>{% endif %}<span>Page {{ snapshot.page + 1 }}</span>{% if snapshot.has_next %}<a href="{{ path('app_dashboard', {project:snapshot.project, task:snapshot.task.id|default(null), page:snapshot.page + 1}) }}#work">Next →</a>{% endif %}</nav>
 {% if snapshot.task %}
 <section id="task-inspector"><h2>Task inspector · {{ snapshot.task.title }}</h2><p>{{ snapshot.task.id }} · {{ snapshot.task.status }} · version {{ snapshot.task.version }}</p>
 <details><summary>Versioned contracts</summary>{{ ui.table(snapshot.task.contracts) }}</details>
@@ -24,9 +62,17 @@
 <h3>Task receipts</h3>{{ ui.table(snapshot.task.receipts) }}
 <h3>Task → commit provenance</h3>{{ ui.diagram(snapshot.task.diagram, "provenance") }}<pre>{{ snapshot.task.provenance_graph }}</pre><pre>{{ snapshot.task.git|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
 </section>{% endif %}
-<section><h2>Dependency graph</h2>{{ ui.diagram(snapshot.dependency_diagram, "dependencies") }}<p class="muted">Mermaid source, bounded to this history page. Arrows point from prerequisite to dependent task.</p><pre>{{ snapshot.dependency_graph }}</pre>{{ ui.table(snapshot.dependencies) }}</section>
-<section><h2>Agent sessions</h2>{{ ui.table(snapshot.sessions) }}<h3>Session activity timeline</h3>{{ ui.table(snapshot.session_timeline) }}</section>
+</section>
+<section id="view-git" data-console-view="git" aria-label="Git" hidden>
 <section><h2>Git activity ledger and graphs</h2>{% for repository in snapshot.repositories %}<details open><summary>Repository {{ repository.id }} · observed {{ repository.observed_at|default('not yet') }}</summary><h3>Observed refs</h3><pre>{{ repository.refs }}</pre><h3>Ledger</h3><pre>{{ repository.events|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Commit graph · Mermaid source</h3>{{ ui.diagram(repository.diagram, repository.id) }}<pre>{{ repository.graph is iterable ? repository.graph|json_encode(constant('JSON_PRETTY_PRINT')) : repository.graph }}</pre></details>{% else %}<p class="muted">No registered repositories.</p>{% endfor %}</section>
+<section class="panel"><h2>Dependency relationships</h2>{{ ui.diagram(snapshot.dependency_diagram, 'dependencies') }}<details><summary>Mermaid source and indexed relationships</summary><pre>{{ snapshot.dependency_graph }}</pre>{{ ui.table(snapshot.dependencies) }}</details></section>
+</section>
+<section id="view-history" data-console-view="history" aria-label="History" hidden>
+<section><h2>Agent sessions</h2>{{ ui.table(snapshot.sessions) }}<h3>Session activity timeline</h3>{{ ui.table(snapshot.session_timeline) }}</section>
 <section><h2>Historical receipts</h2><p class="muted">Pending attempts and verified evidence remain distinct. Hashes record integrity; storage policy provides immutability.</p>{{ ui.table(snapshot.receipts) }}{% for receipt in snapshot.receipts %}<p><a href="{{ path('api_observability_receipt', {id:receipt.id}) }}">Inspect canonical evidence · {{ receipt.id }}</a></p>{% endfor %}</section>
+<nav class="pagination" aria-label="History pages">{% if snapshot.page > 0 %}<a href="{{ path('app_dashboard', {project:snapshot.project, page:snapshot.page - 1}) }}#history">← Previous</a>{% endif %}<span>Page {{ snapshot.page + 1 }} · bounded histories</span><a href="{{ path('app_dashboard', {project:snapshot.project, page:snapshot.page + 1}) }}#history">Next histories →</a></nav>
+</section>
+<section id="view-runtime" data-console-view="runtime" aria-label="Runtime" hidden>
 <section><h2>Worker health</h2><pre>{{ snapshot.health|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Worker processes</h3><pre>{{ snapshot.workers|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Queues</h3><pre>{{ snapshot.queues|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Background jobs</h3><pre>{{ snapshot.jobs|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre></section>
-<section><h2>Live activity</h2><p>Notifications refresh this authoritative snapshot. <button type="button" id="refresh-now">Refresh now</button></p><ol id="activity-log" aria-live="polite"></ol></section>
+
+</section>

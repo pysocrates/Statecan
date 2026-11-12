@@ -1,10 +1,26 @@
 {% extends 'base.html.twig' %}
-{% block title %}Statecan · Operations{% endblock %}
+{% block title %}Statecan · Operations console{% endblock %}
 {% block stylesheets %}<link rel="stylesheet" href="{{ app.request.basePath }}/observability.css">{% endblock %}
 {% block javascripts %}<script src="{{ app.request.basePath }}/observability.js" defer></script>{% endblock %}
 {% block body %}
-<header><a href="{{ path('app_home') }}">Statecan</a> / Human observability <span id="connection" role="status">Connecting…</span></header>
-<main id="observability" data-events="{{ path('api_observability_events', app.request.query.all) }}" data-fragment="{{ path('app_dashboard_fragment', app.request.query.all) }}">
-{% include 'observability/_snapshot.html.twig' %}
-</main>
+<a class="skip-link" href="#console-content">Skip to content</a>
+<header class="app-header">
+    <a class="brand" href="{{ path('app_home') }}"><span class="brand-mark" aria-hidden="true">S</span>Statecan <span class="product-label">OPERATIONS CONSOLE</span></a>
+    <div class="connection-state"><span id="connection" role="status">Connecting to events…</span><span id="freshness">Server snapshot loaded</span></div>
+</header>
+<div class="console-shell">
+    <nav class="console-nav" aria-label="Console views">
+        {% for key, label in {operations:'Operations', work:'Work', git:'Git', history:'History', runtime:'Runtime'} %}
+        <a href="#{{ key }}" data-view-link="{{ key }}" aria-controls="view-{{ key }}" {% if (snapshot.task ? 'work' : 'operations') == key %}aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+        <a class="account-link" href="{{ path('app_home') }}">Account</a>
+    </nav>
+    <main id="console-content" tabindex="-1">
+        <div class="workspace-header"><div><span class="eyebrow">LIVE WORKSPACE</span><h1 id="view-heading">{{ snapshot.task ? 'Work' : 'Operations' }}</h1></div><button type="button" id="refresh-now">Refresh data</button></div>
+        <p id="console-error" class="notice danger" role="alert" hidden></p>
+        <div id="observability" data-events="{{ path('api_observability_events', app.request.query.all) }}" data-fragment="{{ path('app_dashboard_fragment', app.request.query.all) }}" data-initial-view="{{ snapshot.task ? 'work' : 'operations' }}">
+        {% include 'observability/_snapshot.html.twig' %}
+        </div>
+    </main>
+</div>
 {% endblock %}
