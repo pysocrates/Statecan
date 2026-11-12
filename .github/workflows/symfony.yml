@@ -28,6 +28,9 @@ jobs:
       DATABASE_URL: 'postgresql://statecan:statecan@127.0.0.1:5432/statecan?serverVersion=18&charset=utf8'
       PANTHER_APP_ENV: test
       PHP_CLI_SERVER_WORKERS: '4'
+      # Isolated CI runner only; Panther defaults to headless Chrome.
+      PANTHER_NO_SANDBOX: '1'
+      PANTHER_CHROME_ARGUMENTS: '--disable-dev-shm-usage'
 
     services:
       postgres:
@@ -82,6 +85,28 @@ jobs:
           chromedriver --version
           "${{ steps.chrome.outputs.chrome-path }}" --version
 
+      - name: Smoke-test headless Chrome startup
+        if: matrix.suite == 'browser'
+        env:
+          CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          mkdir -p var/ci-browser
+          set +e
+          timeout 25s "$CHROME_BINARY" \
+            --headless --no-sandbox --disable-dev-shm-usage \
+            --disable-gpu --disable-extensions \
+            --dump-dom about:blank \
+            >var/ci-browser/chrome-smoke.html \
+            2>var/ci-browser/chrome-stderr.log
+          result=$?
+          set -e
+          if [ "$result" -ne 0 ]; then
+            cat var/ci-browser/chrome-stderr.log
+            echo "::error::Headless Chrome smoke test failed (exit $result)"
+            exit "$result"
+          fi
+          echo "Chrome headless startup succeeded"
+
       - name: Run Panther browser tests
         if: matrix.suite == 'browser'
         env:
@@ -98,5 +123,6 @@ jobs:
             var/error-screenshots/
             var/console-qa/
             var/console-screenshots/
+            var/ci-browser/
           if-no-files-found: ignore
           retention-days: 7
