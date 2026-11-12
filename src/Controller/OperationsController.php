@@ -28,9 +28,21 @@ final class OperationsController extends AbstractController
         return $this->json(['queues' => $this->monitor->queues()]);
     }
 
+    #[Route('/workers', methods: ['GET'])]
+    public function workers(): JsonResponse
+    {
+        return $this->json(['workers' => $this->monitor->workers()]);
+    }
+
     #[Route('/health', methods: ['GET'])]
     public function health(): JsonResponse
     {
-        return $this->json($this->monitor->health());
+        try {
+            $health = $this->monitor->health();
+        } catch (\Doctrine\DBAL\Exception) {
+            return $this->json(['status' => 'unavailable', 'database' => 'unavailable', 'worker_liveness' => 'unknown'], 503);
+        }
+
+        return $this->json($health, 'ok' === $health['status'] ? 200 : 503);
     }
 }

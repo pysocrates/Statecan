@@ -18,8 +18,11 @@ $events = $container->get(EventDispatcherInterface::class);
 $events->addListener('task.runtime_test', static function () use ($argv): void {
     echo "JOB_STARTED\n";
     flush();
-    if ('block' === ($argv[1] ?? '')) {
-        sleep(60);
+    if (in_array($argv[1] ?? '', ['block', 'console'], true)) {
+        $deadline = hrtime(true) + 60_000_000_000;
+        while (hrtime(true) < $deadline) {
+            usleep(100000);
+        }
     }
     echo "JOB_FINISHED\n";
 });
@@ -29,6 +32,14 @@ $transport = (new DoctrineTransportFactory($container->get('doctrine')))->create
     'redeliver_timeout' => 300,
     'use_notify' => false,
 ], new PhpSerializer());
+if ('console' === ($argv[1] ?? '')) {
+    $container->set('messenger.transport.state_events', $transport);
+    (new Symfony\Bundle\FrameworkBundle\Console\Application($kernel))->run(new Symfony\Component\Console\Input\ArrayInput([
+        'command' => 'messenger:consume', 'receivers' => ['state_events'],
+        '--keepalive' => 1, '--limit' => 1, '--no-interaction' => true,
+    ]));
+    exit;
+}
 $worker = new Worker(['state_events' => $transport], $container->get(MessageBusInterface::class), $events);
 $events->addListener(WorkerMessageHandledEvent::class, static fn () => $worker->stop());
 $worker->run();

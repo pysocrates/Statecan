@@ -71,6 +71,7 @@ final class DashboardProjection
                 'sessions' => $sessions, 'session_timeline' => $sessionTimeline, 'repositories' => $repositories,
                 'receipts' => $this->receipts('', [$project], $offset),
                 'jobs' => $this->runtime->jobs(self::PAGE_SIZE),
+                'workers' => $this->runtime->workers(self::PAGE_SIZE),
                 'queues' => $this->runtime->queues(), 'health' => $this->runtime->health(),
             ];
         });

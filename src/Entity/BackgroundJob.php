@@ -29,6 +29,10 @@ class BackgroundJob
     private ?\DateTimeImmutable $finishedAt = null;
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $error = null;
+    #[ORM\Column(length: 36, nullable: true)]
+    private ?string $workerId = null;
+    #[ORM\Column(length: 190, nullable: true)]
+    private ?string $queueName = null;
 
     public function getId(): string
     {

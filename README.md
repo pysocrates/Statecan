@@ -131,7 +131,7 @@ The REST API lives under `/api/v1`. Operators use the form-authenticated session
 | Ownership and completion | `POST /tasks/{id}/claim`, `/heartbeat`, `/transition`, `/complete` |
 | Repositories | `POST /repositories`, `POST /repositories/{id}/sync`, `GET /repositories/{id}/events`, `/graph` |
 | Provenance | `GET /tasks/{id}/git` |
-| Operations | `GET /operations/jobs`, `/operations/queues`, `/operations/health` |
+| Operations | `GET /operations/jobs`, `/operations/queues`, `/operations/workers`, `/operations/health` |
 | Dashboard data | `GET /observability/snapshot`, `/observability/events`, `/observability/receipts/{id}` |
 
 Mutation requests require an `Idempotency-Key`. Reuse a key only when retrying the same operation and input. JSON payloads use `Content-Type: application/json`; send `Accept: application/json` for API responses. Version, ownership, and idempotency conflicts return `409`. Durable asynchronous scheduling returns `202`.
@@ -233,7 +233,7 @@ The initial v1 verification run passed **10 tests and 113 assertions**, includin
 - The dashboard is primarily read-only. Project/task administration is API-driven.
 - Git integration supports trusted local repositories only. There are no GitHub webhooks or remote fetches in v1, and indexing scans locally reachable history.
 - SSE uses PostgreSQL commit notifications to push changes over open authenticated streams. `STATECAN_SSE_DURATION` defaults to 25 seconds; reconnects recover missed changes and recheck permissions. Each stream needs a PHP worker and a dedicated PostgreSQL listener connection. Larger installations may need Mercure or another dedicated notification service.
-- Queue depth and job state do not prove worker process liveness.
+- Worker lifecycle and keepalive heartbeats establish recent responsiveness. Separate job-runtime, queue-backlog and outbox-age checks identify suspected stalls. Health returns HTTP 503 when coverage is missing or work is stalled; see [runtime thresholds](docs/runtime.md).
 - Filesystem administrators can alter receipt files unless storage adds stronger controls; verification checks stored bytes, not the truth of reported work.
 - Existing MySQL deployments require a separate data migration to PostgreSQL.
 

@@ -18,6 +18,7 @@ final readonly class JobMiddleware implements MiddlewareInterface
         private Connection $connection,
         private RuntimeLockFactory $locks,
         private LoggerInterface $logger,
+        private WorkerHeartbeat $heartbeat,
     ) {
     }
 
@@ -41,6 +42,7 @@ final readonly class JobMiddleware implements MiddlewareInterface
                 return $envelope;
             }
             $this->connection->executeStatement("INSERT INTO background_job (id, message_type, status, attempts, correlation_id, created_at, started_at) VALUES (?, ?, 'processing', 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET status = 'processing', attempts = background_job.attempts + 1, started_at = CURRENT_TIMESTAMP, finished_at = NULL, error = NULL", [$id, $message::class, $correlationId]);
+            $this->connection->executeStatement('UPDATE background_job SET worker_id = ?, queue_name = ? WHERE id = ?', [$this->heartbeat->id(), $received->getTransportName(), $id]);
             $this->logger->info('Job started', $context);
             try {
                 $result = $stack->next()->handle($envelope, $stack);

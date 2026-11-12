@@ -71,8 +71,12 @@ and require no JavaScript build pipeline. PostgreSQL documents the required
 [LISTEN-before-read ordering](https://www.postgresql.org/docs/18/sql-listen.html)
 and [transactional notification delivery](https://www.postgresql.org/docs/18/sql-notify.html).
 
-Worker liveness is displayed exactly as reported by RuntimeMonitor. Queue depth,
-job latency and failure status are observations, not proof that workers are alive.
+Worker liveness comes from persisted Messenger lifecycle/keepalive heartbeats.
+The dashboard displays worker processes, subscribed queues, heartbeat ages, job
+progress boundaries and stall reasons. Missing queue coverage, stale owners, overdue
+processing, aged ready backlogs and stalled outbox dispatch degrade health; see
+[runtime operations](runtime.md) for thresholds and heartbeat requirements. A fresh
+heartbeat proves responsiveness, not useful handler progress.
 A pending completion attempt is visibly distinct from verified evidence. Displaying
 a stored hash does not assert that storage itself is immutable. Mermaid is provided
 as escaped source and indexed relationships, with bounded server-rendered SVG

@@ -10,7 +10,66 @@ All five queues and the failed queue share `messenger_messages`. Auto-setup is d
 
 The dispatcher inserts queued job rows in the enqueue transaction. Job middleware records attempts, errors, correlation IDs and status; completed event IDs are suppressed on redelivery. PostgreSQL session advisory locks serialize attempts across workers without holding transactions during external operations. Process termination releases the lock. Messenger redelivers unacknowledged jobs after 300 seconds; run with `--keepalive=30` for longer handlers. A crash after an external effect but before the completion marker can repeat that effect: receipt/Git/notification handlers must implement their own deterministic idempotence. This is at-least-once delivery, not an atomic transaction with external storage. Custom typed messages should implement `App\Runtime\JobMessage` with a stable ID for retry-safe job identity.
 
-Operator-only GET `/api/v1/operations/jobs`, `/queues`, `/health` expose bounded operational data. Job rows include status, attempts, correlation_id and latency_seconds; queue rows include depth, in_flight and oldest_age_seconds. Queue depth includes delayed/in-flight messages. Worker process liveness is explicitly not probed; health checks database availability, pending outbox and dead letters. Existing form auth remains in place; ROLE_OPERATOR is required.
+## Worker liveness and stalled work
+
+Operator-only GET `/api/v1/operations/workers` reports up to 100 recent worker
+instances: unique ID, hostname, PID, subscribed transports, last heartbeat,
+last job-boundary progress, current job, completed attempt count, and derived
+`idle`, `busy`, `stale`, or `stopped` liveness. Multiple processes and hosts are
+tracked independently; restarting creates a new instance rather than reusing a PID.
+Historical records are retained, but only fresh, non-stopped workers count toward
+queue coverage. The dashboard shows the 25 most recent instances.
+
+Messenger lifecycle listeners register startup, message receipt, success/failure,
+idle-loop activity, and graceful shutdown. Idle heartbeats are throttled to once
+every 15 seconds by default (less with a short TTL). During long handlers,
+Messenger Console keepalive alarms also refresh the heartbeat: run consumers with
+`--keepalive=30` and `pcntl`, as the supplied systemd units do. The heartbeat uses
+a separate autocommit DB connection with a two-second statement timeout, so it
+cannot commit or join a handler's transaction. Each worker needs one additional
+database connection. A worker without keepalive alarms may look stale during a
+long handler; configure keepalive intervals below the heartbeat TTL. Blocking
+native code may defer signal processing; freshness measures observed responsiveness,
+not an OS-level guarantee that a PID exists.
+
+Configure these thresholds in the deployment environment (seconds):
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `STATECAN_WORKER_TTL` | 90 | Maximum heartbeat age for a live worker |
+| `STATECAN_JOB_TIMEOUT` | 300 | Maximum processing time before a job is suspected stalled |
+| `STATECAN_QUEUE_STALL` | 300 | Maximum ready-message or pending-outbox age |
+
+GET `/api/v1/operations/jobs` includes `worker_id`, `queue_name`, latency, and a
+nullable `stall_reason`. Reasons include `runtime_exceeded`, `heartbeat_expired`,
+`worker_stopped`, `worker_missing`, and `worker_untracked` (legacy processing rows
+without ownership, after the TTL). These are read-time diagnostics: the persisted
+job status stays `processing`. A fresh heartbeat proves responsiveness, not useful
+handler progress. Job-boundary timestamps and runtime limits are deliberately
+separate; long legitimate work may require a higher timeout. No task, lease or
+message is automatically failed/requeued by these diagnostics. Normal Messenger
+redelivery and idempotency remain responsible for recovery.
+
+GET `/api/v1/operations/queues` adds fresh-worker count, ready-message count,
+oldest ready age and backlog-stalled status. Delayed retries are excluded until
+they become available. Each of the five normal queues requires fresh coverage;
+the `failed` transport deliberately does not. A multi-queue worker covers each
+subscribed queue, but does not guarantee fair scheduling under priority starvation.
+
+GET `/api/v1/operations/health` returns HTTP 200 only when healthy, or HTTP 503 when
+degraded/unavailable. Degradation includes missing worker coverage even on empty
+queues, stalled processing jobs, old ready backlogs, aged unpublished outbox events,
+or dead letters. The body reports missing queues, stalled counts/queues, thresholds,
+and pending outbox age. A database failure reports liveness `unknown`, not healthy.
+The health check is read-only and detection runs when monitoring is queried.
+
+Apply migration `Version20261112060000` before deploying the code and restart
+workers so they begin reporting. The migration adds the worker registry, job
+ownership/queue columns, and a PostgreSQL notification trigger: lifecycle and
+heartbeat changes refresh the live dashboard. Unclean exits remain apparently
+fresh until TTL expiry; graceful exits are marked stopped immediately. Deployments
+must consume all five queues for a healthy result. Keep endpoint access restricted
+to operators; hostname/PID metadata is operational information.
 
 ## systemd deployment
 
