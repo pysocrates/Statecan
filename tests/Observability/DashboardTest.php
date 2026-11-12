@@ -7,13 +7,13 @@ use App\Entity\AgentSession;
 use App\Entity\CompletionReceipt;
 use App\Entity\GitRepository;
 use App\Entity\Project;
-use App\Git\GitId;
 use App\Entity\Task;
 use App\Entity\TaskContract;
 use App\Entity\User;
 use App\Service\TaskTransitionService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Uid\Uuid;
 
 final class DashboardTest extends WebTestCase
 {
@@ -31,7 +31,7 @@ final class DashboardTest extends WebTestCase
         $agent = new Agent('Smoke agent', hash('sha256', random_bytes(32)));
         $session = new AgentSession($agent, 'smoke-session');
         $receipt = new CompletionReceipt($task, $session, 1, 1, 'smoke-receipt', bin2hex(random_bytes(18)), '{"result":"smoke"}');
-        $repository = new GitRepository(GitId::new(), $project, 'fixture-observation-'.bin2hex(random_bytes(8)));
+        $repository = new GitRepository(Uuid::v7()->toRfc4122(), $project, 'fixture-observation-'.bin2hex(random_bytes(8)));
         foreach ([$user, $project, $task, $contract, $agent, $session, $receipt, $repository] as $entity) {
             $em->persist($entity);
         }
