@@ -1,0 +1,50 @@
+framework:
+    messenger:
+        failure_transport: failed
+        buses:
+            messenger.bus.default:
+                middleware:
+                    - App\Runtime\JobMiddleware
+        transports:
+            state_events: &postgres_queue
+                dsn: 'doctrine://default'
+                options: &postgres_options
+                    queue_name: state_events
+                    auto_setup: false
+                    redeliver_timeout: 300
+                    use_notify: false
+                retry_strategy:
+                    max_retries: 5
+                    delay: 1000
+                    multiplier: 2
+                    max_delay: 60000
+                    jitter: 0.2
+            receipts:
+                <<: *postgres_queue
+                options:
+                    <<: *postgres_options
+                    queue_name: receipts
+            git_indexing:
+                <<: *postgres_queue
+                options:
+                    <<: *postgres_options
+                    queue_name: git_indexing
+            notifications:
+                <<: *postgres_queue
+                options:
+                    <<: *postgres_options
+                    queue_name: notifications
+            maintenance:
+                <<: *postgres_queue
+                options:
+                    <<: *postgres_options
+                    queue_name: maintenance
+            failed:
+                <<: *postgres_queue
+                options:
+                    <<: *postgres_options
+                    queue_name: failed
+                retry_strategy:
+                    max_retries: 0
+        routing:
+            App\Message\OutboxMessage: state_events
