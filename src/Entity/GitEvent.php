@@ -66,5 +66,4 @@ class GitEvent
     {
         return $this->observedAt;
     }
-
 }

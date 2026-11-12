@@ -33,8 +33,8 @@ schedule another scan. Successful mutations return 202 with `id` and `jobId` aft
 repository/outbox persistence commits atomically. Unknown project/repository/task
 returns 404, invalid path/key 400, invalid JSON DTO 422 (malformed JSON 400), missing
 operator authorization 403 (unauthenticated form requests may redirect to login).
-Symfony JSON error responses contain status/title/detail; validation errors also
-include violations. Limits are 1–200 and offset 0–1,000,000.
+API errors use `{ "error": { "status": 400, "code": "bad_request",
+"message": "..." } }` through the shared API exception listener. Limits are 1–200 and offset 0–1,000,000.
 
 ## Workers and evidence
 

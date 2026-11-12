@@ -24,7 +24,7 @@ final class GitController extends AbstractController
     }
 
     #[Route('/repositories', name: 'api_git_register', methods: ['POST'])]
-    public function register(#[MapRequestPayload] RegisterRepository $input, Request $request): JsonResponse
+    public function register(#[MapRequestPayload(acceptFormat: 'json')] RegisterRepository $input, Request $request): JsonResponse
     {
         try {
             $result = $this->catalog->register($input->projectId, $input->path, $this->key($request));

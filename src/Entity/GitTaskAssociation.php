@@ -91,5 +91,4 @@ class GitTaskAssociation
     {
         return $this->observedAt;
     }
-
 }
