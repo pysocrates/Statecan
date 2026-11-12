@@ -27,11 +27,15 @@ final readonly class OutboxDispatcher
                     return null;
                 }
                 $payload = json_decode($row['payload'], true, 512, JSON_THROW_ON_ERROR);
-                $correlationId = (string) ($payload['correlationId'] ?? $row['id']);
+                $correlationId = $payload['correlationId'] ?? $row['id'];
+                if (!is_string($correlationId) || strlen($correlationId) > 128 || '' === $correlationId) {
+                    $correlationId = $row['id'];
+                }
                 $message = new OutboxMessage($row['id'], $row['type'], $row['aggregate_id'], $payload, $correlationId);
                 // Doctrine transports MUST share this connection; enqueue and publish commit together.
                 $this->bus->dispatch($message, [new TransportNamesStamp([self::queueFor($row['type'])])]);
-                $db->executeStatement('UPDATE outbox_event SET published_at = CURRENT_TIMESTAMP WHERE id = ?', [$row['id']]);
+                $db->executeStatement("INSERT INTO background_job (id, message_type, status, attempts, correlation_id, created_at) VALUES (?, ?, 'queued', 0, ?, CURRENT_TIMESTAMP) ON CONFLICT (id) DO NOTHING", [$row['id'], OutboxMessage::class, $correlationId]);
+                $db->executeStatement("UPDATE outbox_event SET published_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC' WHERE id = ?", [$row['id']]);
 
                 return ['event_id' => $row['id'], 'correlation_id' => $correlationId];
             });

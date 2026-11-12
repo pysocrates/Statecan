@@ -1,0 +1,20 @@
+[Unit]
+Description=Statecan durable outbox dispatch
+After=network.target
+
+[Service]
+Type=oneshot
+User=statecan
+Group=statecan
+WorkingDirectory=/srv/statecan
+Environment=APP_ENV=prod
+Environment=APP_DEBUG=0
+EnvironmentFile=/etc/statecan/runtime.env
+ExecStart=/usr/bin/php /srv/statecan/bin/console statecan:outbox:dispatch --limit=1000 --no-interaction
+TimeoutStartSec=60
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/statecan/var
+UMask=0027

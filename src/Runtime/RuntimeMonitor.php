@@ -21,7 +21,7 @@ final readonly class RuntimeMonitor
     {
         $rows = [];
         foreach (self::QUEUES as $queue) {
-            $row = $this->connection->fetchAssociative('SELECT COUNT(*) AS depth, COUNT(delivered_at) AS in_flight, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MIN(created_at))) AS oldest_age_seconds FROM messenger_messages WHERE queue_name = ?', [$queue]);
+            $row = $this->connection->fetchAssociative("SELECT COUNT(*) AS depth, COUNT(delivered_at) AS in_flight, EXTRACT(EPOCH FROM ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - MIN(created_at))) AS oldest_age_seconds FROM messenger_messages WHERE queue_name = ?", [$queue]);
             $rows[] = ['queue' => $queue, 'depth' => (int) $row['depth'], 'in_flight' => (int) $row['in_flight'], 'oldest_age_seconds' => null === $row['oldest_age_seconds'] ? null : (float) $row['oldest_age_seconds']];
         }
 

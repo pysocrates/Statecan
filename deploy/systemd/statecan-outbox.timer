@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll the Statecan transactional outbox
+
+[Timer]
+OnBootSec=5s
+OnUnitInactiveSec=2s
+AccuracySec=1s
+Unit=statecan-outbox.service
+
+[Install]
+WantedBy=timers.target

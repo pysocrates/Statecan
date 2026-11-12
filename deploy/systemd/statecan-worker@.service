@@ -1,0 +1,27 @@
+[Unit]
+Description=Statecan Messenger worker (%i)
+After=network.target
+
+[Service]
+Type=simple
+User=statecan
+Group=statecan
+WorkingDirectory=/srv/statecan
+Environment=APP_ENV=prod
+Environment=APP_DEBUG=0
+EnvironmentFile=/etc/statecan/runtime.env
+ExecStart=/usr/bin/php /srv/statecan/bin/console messenger:consume %i --time-limit=3600 --memory-limit=256M --failure-limit=10 --keepalive=30 --no-interaction
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=330
+RuntimeMaxSec=3900
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/statecan/var
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
