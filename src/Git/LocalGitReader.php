@@ -27,7 +27,7 @@ final class LocalGitReader
         return $real;
     }
 
-    public function snapshot(string $path): array
+    public function snapshot(string $path, ?callable $heartbeat = null): array
     {
         $path = $this->canonicalPath($path);
         $refs = [];
@@ -38,10 +38,11 @@ final class LocalGitReader
             }
         }
         $commits = [];
-        foreach (array_keys($refs) as $ref) {
+        foreach ($refs as $ref => $tip) {
             // --end-of-options and validated ref names prevent revision option injection.
-            foreach (explode("\n", trim($this->run($path, ['rev-list', '--end-of-options', $ref, '--']))) as $sha) {
+            foreach (explode("\n", trim($this->run($path, ['rev-list', '--end-of-options', $tip, '--']))) as $sha) {
                 if (preg_match('/^[a-f0-9]{40,64}$/D', $sha) && !isset($commits[$sha])) {
+                    $heartbeat && $heartbeat();
                     $parts = explode("\0", $this->run($path, ['show', '-s', '--format=%P%x00%an%x00%ae%x00%aI%x00%B', $sha, '--']), 5);
                     $body = $parts[4] ?? '';
                     $trailers = [];
