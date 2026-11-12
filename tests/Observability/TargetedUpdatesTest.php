@@ -38,6 +38,7 @@ final class TargetedUpdatesTest extends WebTestCase
             self::assertContains('work', $invalidation['components']);
             self::assertSame($task->getId(), $invalidation['entities'][0]['id']);
             self::assertSame('task', $invalidation['entities'][0]['type']);
+            self::assertSame('UPDATE', $invalidation['entities'][0]['operation']);
             self::assertNotEmpty($invalidation['entities'][0]['revision']);
             $client->request('GET', '/api/v1/observability/components/work?project='.$project->getId());
             self::assertResponseIsSuccessful();

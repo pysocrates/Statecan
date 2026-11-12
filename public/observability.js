@@ -37,6 +37,13 @@
         pendingComponents.clear();
         connection.textContent = 'Session unavailable';
         report('Your session expired or operator access changed. Sign in again from Account.');
+        const account = document.querySelector('.account-link');
+        if (root.dataset.loginUrl || account) {
+            const link = document.createElement('a');
+            link.href = root.dataset.loginUrl || account.href;
+            link.textContent = root.dataset.loginUrl ? 'Sign in' : 'Open Account';
+            error.append(' ', link);
+        }
         emit('statecan:session-expired', {});
     }
     document.addEventListener('statecan:session-expired', expire);
@@ -160,11 +167,13 @@
         try {
             await task;
             if (stopped) return;
-            error.hidden = true;
-            freshness.textContent = labels[name] + ' updated ' + new Date().toLocaleTimeString();
+            if (name === view) {
+                error.hidden = true;
+                freshness.textContent = labels[name] + ' updated ' + new Date().toLocaleTimeString();
+            }
             emit('statecan:component-updated', {component: name});
         } catch (failure) {
-            if (!stopped) report(failure instanceof TypeError ? 'Connection failed. The last snapshot is retained; use Refresh data to retry.' : (failure.message || 'Component refresh failed.'));
+            if (!stopped && name === view) report(failure instanceof TypeError ? 'Connection failed. The last snapshot is retained; use Refresh data to retry.' : (failure.message || 'Component refresh failed.'));
         } finally {
             running.delete(name);
             mount?.removeAttribute('aria-busy');

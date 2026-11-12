@@ -44,6 +44,7 @@ final class ActivityInvalidation
                 $entities[$table.':'.$change['id']] = [
                     'type' => self::TYPES[$table] ?? $table, 'id' => $change['id'],
                     'revision' => (string) ($change['revision'] ?? ''),
+                    'operation' => $change['operation'] ?? null,
                     'taskId' => $change['taskId'] ?? ('task' === $table ? $change['id'] : null),
                     'sessionId' => $change['sessionId'] ?? ('agent_session' === $table ? $change['id'] : null),
                     'projectId' => $change['projectId'] ?? null,
