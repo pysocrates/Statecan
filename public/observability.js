@@ -10,6 +10,7 @@
     const handlers = new Map();
     const dirty = new Map();
     const running = new Map();
+    const failures = new Map();
     const pendingEntities = new Map();
     const pendingComponents = new Set();
     const controller = new AbortController();
@@ -25,6 +26,11 @@
         error.textContent = message;
         error.hidden = false;
         freshness.textContent = 'Data may be stale';
+    }
+    function showFailure() {
+        const message = failures.get(view) || failures.get('projects');
+        if (message) report(message);
+        else error.hidden = true;
     }
     function expire() {
         if (stopped) return;
@@ -188,13 +194,16 @@
         try {
             await task;
             if (stopped) return;
-            if (name === view) {
-                error.hidden = true;
-                freshness.textContent = labels[name] + ' updated ' + new Date().toLocaleTimeString();
-            }
+            failures.delete(name);
+            if (name === view || name === 'projects') showFailure();
+            if (name === view && !failures.has('projects')) freshness.textContent = labels[name] + ' updated ' + new Date().toLocaleTimeString();
             emit('statecan:component-updated', {component: name});
         } catch (failure) {
-            if (!stopped && name === view) report(failure instanceof TypeError ? 'Connection failed. The last snapshot is retained; use Refresh data to retry.' : (failure.message || 'Component refresh failed.'));
+            if (!stopped) {
+                const message = failure instanceof TypeError ? 'Connection failed. The last snapshot is retained; use Refresh data to retry.' : (failure.message || 'Component refresh failed.');
+                failures.set(name, name === 'projects' ? 'Project choices could not be refreshed. The current selection is retained; use Refresh data to retry.' : message);
+                if (name === view || name === 'projects') showFailure();
+            }
         } finally {
             running.delete(name);
             mount?.removeAttribute('aria-busy');
@@ -247,6 +256,7 @@
         });
         document.getElementById('view-heading').textContent = labels[view];
         document.title = 'Statecan · ' + labels[view];
+        showFailure();
         refreshComponent(view);
         emit('statecan:view-change', {view});
     }
