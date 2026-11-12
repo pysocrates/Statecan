@@ -57,7 +57,7 @@
         url.searchParams.set('page', String(page));
         if (contractVersion) url.searchParams.set('contractVersion', String(contractVersion));
         try {
-            const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'text/html'}, signal: controller.signal});
+            const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'text/html', 'X-Requested-With': 'XMLHttpRequest'}, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)])});
             if ([401, 403].includes(response.status) || response.redirected) { stopForSession(); return; }
             if (!response.ok) throw new Error(response.status === 404 ? 'This task or contract is no longer available in the selected project.' : 'Task details could not be refreshed. The last loaded details are retained.');
             if (!(response.headers.get('content-type') || '').includes('text/html')) throw new Error('Unexpected task response. Reload the console after signing in.');
@@ -76,7 +76,7 @@
             document.dispatchEvent(new CustomEvent('statecan:inspector-updated', {detail: {taskId: selected, projectId: project}}));
         } catch (failure) {
             if (failure.name === 'AbortError' || current !== sequence) return;
-            error.textContent = failure instanceof TypeError ? 'Connection failed. Task details may be stale; retry when connected.' : failure.message;
+            error.textContent = failure.name === 'TimeoutError' ? 'Task details timed out. The last loaded details are retained; retry when connected.' : (failure instanceof TypeError ? 'Connection failed. Task details may be stale; retry when connected.' : failure.message);
             error.hidden = false;
             retry.hidden = false;
         } finally {
