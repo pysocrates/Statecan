@@ -7,7 +7,6 @@ use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Facebook\WebDriver\Chrome\ChromeDevToolsDriver;
 use Facebook\WebDriver\WebDriverBy;
-use Facebook\WebDriver\WebDriverExpectedCondition;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\Panther\PantherTestCase;
 
@@ -38,7 +37,8 @@ final class RuntimeConsoleBrowserTest extends PantherTestCase
             // Load production shell, partials and assets exactly as an operator does.
             $client->request('GET', '/dashboard?project='.$project->getId());
             $client->getWebDriver()->findElement(WebDriverBy::cssSelector('.console-nav [data-view-link="runtime"]'))->click();
-            $client->waitForVisibility('#runtime-panel[data-runtime-loaded="true"]');
+            $client->waitForVisibility('#runtime-panel[data-runtime-loaded="true"]:not([aria-busy])');
+            $client->executeScript('window.runtimeUpdates=0;document.addEventListener("statecan:component-updated",event=>{if(event.detail?.component==="runtime")window.runtimeUpdates++;});');
             self::assertSame('runtime', $client->executeScript('return window.StatecanConsole.view'));
             $devtools = new ChromeDevToolsDriver($client->getWebDriver());
             foreach ([1440, 1024, 768, 390] as $width) {
@@ -56,8 +56,11 @@ final class RuntimeConsoleBrowserTest extends PantherTestCase
             $client->getWebDriver()->findElement(WebDriverBy::cssSelector($detail.' summary'))->click();
             self::assertTrue($client->executeScript('return document.querySelector(arguments[0]).open', [$detail]));
             $oldPanel = $client->getWebDriver()->findElement(WebDriverBy::id('runtime-panel'));
-            $client->getWebDriver()->findElement(WebDriverBy::id('runtime-refresh'))->click();
-            $client->getWebDriver()->wait(10)->until(WebDriverExpectedCondition::stalenessOf($oldPanel));
+            $refreshButton = $client->getWebDriver()->findElement(WebDriverBy::id('runtime-refresh'));
+            $updates = $client->executeScript('return window.runtimeUpdates');
+            $refreshButton->click();
+            $client->getWebDriver()->wait(10)->until(fn () => $client->executeScript('const p=document.getElementById("runtime-panel");return window.runtimeUpdates>arguments[0]&&p.dataset.runtimeLoaded==="true"&&!p.hasAttribute("aria-busy");', [$updates]));
+            self::assertTrue($client->executeScript('return arguments[0].isConnected&&arguments[1].isConnected;', [$oldPanel, $refreshButton]));
             $client->waitForVisibility($detail.'[open]');
             $client->waitForInvisibility('#runtime-panel[aria-busy]');
             self::assertSame('retrying', $client->executeScript('return document.getElementById("runtime-job-filter").value'));

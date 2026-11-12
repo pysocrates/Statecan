@@ -64,11 +64,17 @@
             const focusId = focused?.id;
             const focusDetail = focused?.closest('[data-runtime-detail]')?.dataset.runtimeDetail;
             next.querySelectorAll('details[data-runtime-detail]').forEach(node => { node.open = open.has(node.dataset.runtimeDetail); });
-            root.replaceWith(next);
+            if (registered && window.StatecanConsole?.patch) {
+                window.StatecanConsole.patch(root, html);
+                // The shared patcher deliberately preserves mount attributes.
+                root.dataset.runtimeLoaded = next.dataset.runtimeLoaded;
+            } else {
+                root.replaceWith(next);
+            }
             applyFilter();
             scroll.forEach(item => { const node = document.getElementById(item.id); if (node) node.scrollTop = item.top; });
             if (focusId) document.getElementById(focusId)?.focus({preventScroll: true});
-            else if (focusDetail) Array.from(next.querySelectorAll('[data-runtime-detail]')).find(node => node.dataset.runtimeDetail === focusDetail)?.querySelector('summary')?.focus({preventScroll: true});
+            else if (focusDetail) Array.from(panel().querySelectorAll('[data-runtime-detail]')).find(node => node.dataset.runtimeDetail === focusDetail)?.querySelector('summary')?.focus({preventScroll: true});
             if (!registered) document.dispatchEvent(new CustomEvent('statecan:component-updated', {detail: {component: 'runtime'}}));
             return true;
         } catch (failure) {
