@@ -17,12 +17,13 @@ final readonly class OutboxDispatcher
     ) {
     }
 
-    public function dispatch(int $limit = 100): int
+    public function dispatch(int $limit = 100, ?string $eventId = null): int
     {
         $count = 0;
         for ($i = 0; $i < max(1, min($limit, 1000)); ++$i) {
-            $event = $this->connection->transactional(function (Connection $db): ?array {
-                $row = $db->fetchAssociative('SELECT id, type, aggregate_id, payload FROM outbox_event WHERE published_at IS NULL ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED');
+            $event = $this->connection->transactional(function (Connection $db) use ($eventId): ?array {
+                $filter = null === $eventId ? '' : ' AND id = ?';
+                $row = $db->fetchAssociative('SELECT id, type, aggregate_id, payload FROM outbox_event WHERE published_at IS NULL'.$filter.' ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED', null === $eventId ? [] : [$eventId]);
                 if (false === $row) {
                     return null;
                 }

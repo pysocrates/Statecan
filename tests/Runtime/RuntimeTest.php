@@ -36,22 +36,28 @@ final class RuntimeTest extends KernelTestCase
         $transport = $container->get('messenger.transport.state_events');
         self::assertInstanceOf(TransportInterface::class, $transport);
         $bus = $container->get(MessageBusInterface::class);
+        $queue = 'runtime_test_'.$event->getId();
+        $messageId = null;
         try {
-            self::assertSame(1, $dispatcher->dispatch());
-            self::assertSame(0, $dispatcher->dispatch());
+            self::assertSame(1, $dispatcher->dispatch(eventId: $event->getId()));
+            self::assertSame(0, $dispatcher->dispatch(eventId: $event->getId()));
             self::assertNotNull($db->fetchOne('SELECT published_at FROM outbox_event WHERE id = ?', [$event->getId()]));
-            self::assertSame(1, $monitor->queues()[0]['depth']);
+            $messageId = $db->fetchOne('SELECT id FROM messenger_messages WHERE body LIKE ?', ['%'.$event->getId().'%']);
+            self::assertNotFalse($messageId);
+            // Only this fixture is moved to a private worker queue; peer rows stay untouched.
+            $db->executeStatement('UPDATE messenger_messages SET queue_name = ? WHERE id = ?', [$queue, $messageId]);
+            self::assertContains('state_events', array_column($monitor->queues(), 'queue'));
             $phpArgs = json_decode(getenv('STATECAN_TEST_PHP_ARGS') ?: '[]', true, 512, JSON_THROW_ON_ERROR);
             $command = [PHP_BINARY, ...$phpArgs, __DIR__.'/Fixtures/worker.php'];
-            $worker = new Process([...$command, 'block'], self::$kernel->getProjectDir(), ['APP_ENV' => 'test']);
+            $worker = new Process([...$command, 'block', $queue], self::$kernel->getProjectDir(), ['APP_ENV' => 'test']);
             $worker->start();
             self::assertTrue($worker->waitUntil(static fn (string $type, string $output): bool => str_contains($output, 'JOB_STARTED')), $worker->getErrorOutput());
             $worker->signal(9);
             $worker->wait();
             self::assertSame('processing', $db->fetchOne('SELECT status FROM background_job WHERE id = ?', [$event->getId()]));
             // Advance the expired delivery timestamp instead of waiting five minutes.
-            $db->executeStatement("UPDATE messenger_messages SET delivered_at = CURRENT_TIMESTAMP - INTERVAL '301 seconds' WHERE queue_name = 'state_events'");
-            $restarted = new Process([...$command, 'finish'], self::$kernel->getProjectDir(), ['APP_ENV' => 'test']);
+            $db->executeStatement("UPDATE messenger_messages SET delivered_at = CURRENT_TIMESTAMP - INTERVAL '301 seconds' WHERE id = ?", [$messageId]);
+            $restarted = new Process([...$command, 'finish', $queue], self::$kernel->getProjectDir(), ['APP_ENV' => 'test']);
             $restarted->mustRun();
             self::assertStringContainsString('JOB_FINISHED', $restarted->getOutput());
             // A duplicate delivery after metadata committed must suppress the handler.
@@ -59,13 +65,13 @@ final class RuntimeTest extends KernelTestCase
             self::assertSame(0, $calls);
             self::assertSame('completed', $db->fetchOne('SELECT status FROM background_job WHERE id = ?', [$event->getId()]));
             self::assertSame(2, (int) $db->fetchOne('SELECT attempts FROM background_job WHERE id = ?', [$event->getId()]));
-            self::assertSame(0, $monitor->queues()[0]['depth']);
-            self::assertSame('ok', $monitor->health()['status']);
+            self::assertSame(0, (int) $db->fetchOne('SELECT COUNT(*) FROM messenger_messages WHERE queue_name = ?', [$queue]));
+            self::assertSame('ok', $monitor->health()['database']);
         } finally {
             if (isset($worker) && $worker->isRunning()) {
                 $worker->stop(0);
             }
-            $db->executeStatement('DELETE FROM messenger_messages WHERE body LIKE ?', ['%'.$event->getId().'%']);
+            $db->executeStatement('DELETE FROM messenger_messages WHERE id = ?', [$messageId]);
             $db->executeStatement('DELETE FROM background_job WHERE id = ?', [$event->getId()]);
             $db->executeStatement('DELETE FROM outbox_event WHERE id = ?', [$event->getId()]);
         }
