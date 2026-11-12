@@ -67,8 +67,6 @@ final readonly class ReceiptProcessor
                     ++$result['inconsistent'];
                 }
             }
-
-
         } while (count($receipts) === max(1, min($limit, 1000)));
 
         return $result;

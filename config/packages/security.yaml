@@ -18,7 +18,9 @@ security:
             stateless: true
             access_token:
                 token_handler: App\Security\AgentTokenHandler
+                failure_handler: App\Security\AgentAuthenticationResponse
         main:
+            entry_point: App\Security\AgentAuthenticationResponse
             lazy: true
             provider: app_users
             form_login:

@@ -99,7 +99,7 @@ final readonly class LeaseService
 
     public function recoverExpired(int $limit = 100): int
     {
-        $ids = $this->em->getConnection()->fetchFirstColumn('SELECT task_id FROM task_lease WHERE expires_at < CURRENT_TIMESTAMP AND expires_at > :epoch LIMIT :limit', ['epoch' => '1970-01-01 00:00:00', 'limit' => $limit], ['limit' => \Doctrine\DBAL\ParameterType::INTEGER]);
+        $ids = $this->em->getConnection()->fetchFirstColumn('SELECT task_id FROM task_lease WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE \'UTC\') AND expires_at > :epoch LIMIT :limit', ['epoch' => '1970-01-01 00:00:00', 'limit' => $limit], ['limit' => \Doctrine\DBAL\ParameterType::INTEGER]);
         $count = 0;
         foreach ($ids as $id) {
             $this->em->wrapInTransaction(function () use ($id, &$count) {
