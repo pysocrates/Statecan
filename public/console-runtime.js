@@ -46,7 +46,7 @@
         root.querySelector('[data-runtime-refresh]').setAttribute('aria-disabled', 'true');
         root.querySelector('#runtime-refresh-status').textContent = 'Loading runtime observations…';
         try {
-            const response = await fetch(root.dataset.runtimeFragment, {credentials: 'same-origin', cache: 'no-store', signal: controller.signal, headers: {'Accept': 'text/html'}});
+            const response = await fetch(root.dataset.runtimeFragment, {credentials: 'same-origin', cache: 'no-store', signal: controller.signal, headers: {'Accept': 'text/html', 'X-Requested-With': 'XMLHttpRequest'}});
             if (response.redirected || [401, 403].includes(response.status)) {
                 document.dispatchEvent(new CustomEvent('statecan:session-expired'));
                 sessionExpired();
