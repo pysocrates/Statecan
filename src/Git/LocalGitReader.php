@@ -56,8 +56,8 @@ final class LocalGitReader
                         }
                     }
                     preg_match('/This reverts commit ([a-f0-9]{40,64})\./', $body, $revert);
-                    $files = array_values(array_filter(explode("\0", $this->run($path, ['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', '-m', '-z', $sha, '--'])), static fn ($v) => '' !== $v));
-                    $commits[$sha] = ['parents' => array_values(array_filter(explode(' ', $parts[0]))), 'author' => $parts[1], 'email' => $parts[2], 'authoredAt' => trim($parts[3]), 'message' => $body, 'files' => array_values(array_unique($files)), 'trailers' => $trailers, 'reverts' => $revert[1] ?? null];
+                    $files = array_values(array_filter(explode("\0", $this->run($path, ['diff-tree', '--no-ext-diff', '--no-textconv', '--root', '--no-commit-id', '--name-only', '-r', '-m', '-z', $sha, '--'])), static fn ($v) => '' !== $v));
+                    $commits[$sha] = ['source' => 'local_git', 'parents' => array_values(array_filter(explode(' ', $parts[0]))), 'author' => $parts[1], 'email' => $parts[2], 'authoredAt' => trim($parts[3]), 'message' => $body, 'files' => array_values(array_unique($files)), 'trailers' => $trailers, 'reverts' => $revert[1] ?? null];
                 }
             }
         }
@@ -72,6 +72,6 @@ final class LocalGitReader
 
     private function process(string $path, array $arguments): Process
     {
-        return new Process(['git', '--no-pager', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.quotePath=false', '-C', $path, ...$arguments], null, ['GIT_CONFIG_NOSYSTEM' => '1', 'GIT_CONFIG_GLOBAL' => '/dev/null', 'GIT_NO_REPLACE_OBJECTS' => '1', 'GIT_TERMINAL_PROMPT' => '0', 'GIT_DIR' => false, 'GIT_WORK_TREE' => false, 'GIT_OBJECT_DIRECTORY' => false, 'GIT_ALTERNATE_OBJECT_DIRECTORIES' => false], null, 120);
+        return new Process(['git', '--no-pager', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.quotePath=false', '-C', $path, ...$arguments], null, ['GIT_CONFIG_NOSYSTEM' => '1', 'GIT_CONFIG_GLOBAL' => '/dev/null', 'GIT_NO_REPLACE_OBJECTS' => '1', 'GIT_TERMINAL_PROMPT' => '0', 'GIT_DIR' => false, 'GIT_COMMON_DIR' => false, 'GIT_CONFIG' => false, 'GIT_CONFIG_COUNT' => false, 'GIT_NAMESPACE' => false, 'GIT_WORK_TREE' => false, 'GIT_OBJECT_DIRECTORY' => false, 'GIT_ALTERNATE_OBJECT_DIRECTORIES' => false], null, 120);
     }
 }

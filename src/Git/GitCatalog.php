@@ -3,6 +3,7 @@
 namespace App\Git;
 
 use Doctrine\DBAL\Connection;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -20,7 +21,7 @@ final class GitCatalog
             if (!$this->db->fetchOne('SELECT id FROM project WHERE id = ?', [$projectId])) {
                 throw new NotFoundHttpException('Project not found.');
             }
-            $this->db->executeStatement("INSERT INTO git_repository (id, project_id, path, created_at, refs) VALUES (?, ?, ?, ?, '{}') ON CONFLICT (path) DO NOTHING", [GitId::new(), $projectId, $path, gmdate('Y-m-d H:i:s')]);
+            $this->db->executeStatement("INSERT INTO git_repository (id, project_id, path, created_at, refs) VALUES (?, ?, ?, ?, '{}') ON CONFLICT (path) DO NOTHING", [Uuid::v7()->toRfc4122(), $projectId, $path, gmdate('Y-m-d H:i:s')]);
             $repository = $this->db->fetchAssociative('SELECT * FROM git_repository WHERE path = ?', [$path]);
             if ($repository['project_id'] !== $projectId) {
                 throw new ConflictHttpException('Repository is already registered to another project.');

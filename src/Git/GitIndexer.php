@@ -3,6 +3,7 @@
 namespace App\Git;
 
 use Doctrine\DBAL\Connection;
+use Symfony\Component\Uid\Uuid;
 use App\Runtime\RuntimeLockFactory;
 
 final class GitIndexer
@@ -37,7 +38,7 @@ final class GitIndexer
                     }
                     $kind = null === $from ? 'ref_created' : (null === $to ? 'ref_deleted' : 'ref_updated');
                     // A unique observation ID preserves repeated A->B->A ref movements.
-                    $this->event($repositoryId, 'ref:'.GitId::new(), $kind, $to, ['ref' => $ref, 'from' => $from, 'to' => $to, 'source' => 'local_git'], $observedAt);
+                    $this->event($repositoryId, 'ref:'.Uuid::v7()->toRfc4122(), $kind, $to, ['ref' => $ref, 'from' => $from, 'to' => $to, 'source' => 'local_git'], $observedAt);
                 }
                 $this->db->executeStatement('UPDATE git_repository SET refs = ?, observed_at = ? WHERE id = ?', [json_encode($snapshot['refs'], JSON_THROW_ON_ERROR), $observedAt, $repositoryId]);
             });
@@ -48,7 +49,7 @@ final class GitIndexer
 
     private function event(string $repository, string $key, string $kind, ?string $sha, array $metadata, string $at): void
     {
-        $this->db->executeStatement('INSERT INTO git_event (id, repository_id, event_key, kind, sha, metadata, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (repository_id, event_key) DO NOTHING', [GitId::new(), $repository, $key, $kind, $sha, json_encode($metadata, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE), $at]);
+        $this->db->executeStatement('INSERT INTO git_event (id, repository_id, event_key, kind, sha, metadata, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (repository_id, event_key) DO NOTHING', [Uuid::v7()->toRfc4122(), $repository, $key, $kind, $sha, json_encode($metadata, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE), $at]);
     }
 
     private function correlate(array $repository, string $sha, array $trailers, string $at): void
@@ -62,7 +63,7 @@ final class GitIndexer
             $validSession = null !== $session && strlen($session) <= 36 ? $this->db->fetchAssociative('SELECT id, agent_id FROM agent_session WHERE id = ?', [$session]) : false;
             // Valid identities are still self-reported: never infer authenticated authorship.
             $verified = $validSession && null !== $agent && $validSession['agent_id'] === $agent;
-            $this->db->executeStatement('INSERT INTO git_task_association (id, repository_id, sha, task_id, session_id, agent_id, source, confidence, verification_status, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (repository_id, sha, task_id) DO UPDATE SET session_id = EXCLUDED.session_id, agent_id = EXCLUDED.agent_id, verification_status = EXCLUDED.verification_status', [GitId::new(), $repository['id'], $sha, $taskId, $validSession ? $session : null, $verified ? $agent : null, 'git_trailer', 'self_reported', $verified ? 'identities_validated' : 'unverified', $at]);
+            $this->db->executeStatement('INSERT INTO git_task_association (id, repository_id, sha, task_id, session_id, agent_id, source, confidence, verification_status, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (repository_id, sha, task_id) DO UPDATE SET session_id = EXCLUDED.session_id, agent_id = EXCLUDED.agent_id, verification_status = EXCLUDED.verification_status', [Uuid::v7()->toRfc4122(), $repository['id'], $sha, $taskId, $validSession ? $session : null, $verified ? $agent : null, 'git_trailer', 'self_reported', $verified ? 'identities_validated' : 'unverified', $at]);
         }
     }
 }
