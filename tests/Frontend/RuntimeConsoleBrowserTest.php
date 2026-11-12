@@ -34,6 +34,7 @@ final class RuntimeConsoleBrowserTest extends PantherTestCase
             $client = self::createPantherClient(['port' => (int) (getenv('PANTHER_WEB_SERVER_PORT') ?: 9092), 'env' => ['PHP_CLI_SERVER_WORKERS' => '4']], [], ['port' => (int) (getenv('PANTHER_CHROME_DRIVER_PORT') ?: 9522)]);
             $crawler = $client->request('GET', '/login');
             $client->submit($crawler->selectButton('Sign in')->form(['_username' => $user->getEmail(), '_password' => 'runtime-browser-password']));
+            $client->waitForVisibility('form[action$="/logout"]');
             // Load production shell, partials and assets exactly as an operator does.
             $client->request('GET', '/dashboard?project='.$project->getId());
             $client->getWebDriver()->findElement(WebDriverBy::cssSelector('.console-nav [data-view-link="runtime"]'))->click();

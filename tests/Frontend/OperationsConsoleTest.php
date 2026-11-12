@@ -51,6 +51,7 @@ final class OperationsConsoleTest extends PantherTestCase
             $client = self::createPantherClient(['env' => ['PHP_CLI_SERVER_WORKERS' => '4']]);
             $crawler = $client->request('GET', '/login');
             $client->submit($crawler->selectButton('Sign in')->form(['_username' => $user->getEmail(), '_password' => 'console-test-password']));
+            $client->waitForVisibility('form[action$="/logout"]');
             $client->request('GET', '/dashboard?project='.$project->getId());
             $client->waitForVisibility('#view-operations');
             self::assertSame('Operations', $client->executeScript('return document.getElementById("view-heading").textContent'));

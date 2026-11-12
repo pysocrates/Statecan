@@ -50,6 +50,7 @@ final class GitHistoryConsoleTest extends PantherTestCase
             $client = self::createPantherClient(['env' => ['PHP_CLI_SERVER_WORKERS' => '4']], [], ['port' => (int) (getenv('PANTHER_CHROMEDRIVER_PORT') ?: 9515)]);
             $crawler = $client->request('GET', '/login');
             $client->submit($crawler->selectButton('Sign in')->form(['_username' => $user->getEmail(), '_password' => 'browser-review-password']));
+            $client->waitForVisibility('form[action$="/logout"]');
             if (!is_dir('var/console-screenshots')) {
                 mkdir('var/console-screenshots', 0770, true);
             }

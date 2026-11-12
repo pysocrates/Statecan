@@ -36,6 +36,7 @@ final class TaskInspectorBrowserTest extends PantherTestCase
             $client = self::createPantherClient(['env' => ['PHP_CLI_SERVER_WORKERS' => '4']], [], ['port' => $driverPort]);
             $crawler = $client->request('GET', '/login');
             $client->submit($crawler->selectButton('Sign in')->form(['_username' => $user->getEmail(), '_password' => 'inspector-browser-password']));
+            $client->waitForVisibility('form[action$="/logout"]');
             $client->request('GET', '/dashboard?project='.$project->getId().'&task='.$task->getId().'#work');
             $client->waitForVisibility('#inspector-title');
             self::assertSame('Selected inspector task', $client->executeScript('return document.getElementById("inspector-title").textContent'));
