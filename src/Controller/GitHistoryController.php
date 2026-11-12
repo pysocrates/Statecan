@@ -34,7 +34,7 @@ final class GitHistoryController extends AbstractController
     #[Route('/dashboard/git/commits/{sha}', name: 'app_console_git_commit', requirements: ['sha' => '[a-f0-9]{40,64}'], methods: ['GET'])]
     public function commit(string $sha, #[MapQueryString] GitHistoryQuery $filter = new GitHistoryQuery()): Response
     {
-        $result = $this->projection->git(new GitHistoryQuery(project: $filter->project, repository: $filter->repository, q: $sha));
+        $result = $this->projection->git(new GitHistoryQuery(project: $filter->project, repository: $filter->repository), $sha);
         $event = array_find($result['events'], static fn (array $event): bool => $event['sha'] === $sha && in_array($event['kind'], ['commit', 'merge'], true));
         if (!$event) {
             throw new NotFoundHttpException('Indexed commit not found in this repository.');

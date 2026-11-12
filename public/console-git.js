@@ -28,7 +28,7 @@
         if (node.contains(focus)) {
             if (focus.id) selector = '#' + CSS.escape(focus.id);
             else if (focus.matches('summary')) selector = `[data-review-detail="${CSS.escape(focus.parentElement.dataset.reviewDetail || '')}"] > summary`;
-            else for (const key of ['data-graph-zoom', 'data-graph-fit', 'data-git-commit', 'data-review-refresh', 'data-review-page']) {
+            else for (const key of ['data-graph-zoom', 'data-graph-fit', 'data-git-commit', 'data-review-refresh', 'data-review-page', 'data-git-close']) {
                 if (focus.hasAttribute(key)) { selector = `[${key}="${CSS.escape(focus.getAttribute(key))}"]`; break; }
             }
         }
@@ -103,6 +103,7 @@
         state.commitController?.abort();
         const controller = new AbortController();
         state.commitController = controller;
+        const changed = state.selected !== sha;
         state.selected = sha;
         const section = node.querySelector('[data-git-selection]');
         const url = new URL(node.dataset.commitBase + sha, location.href);
@@ -110,6 +111,7 @@
         if (repository) url.searchParams.set('repository', repository);
         if (state.project) url.searchParams.set('project', state.project);
         section.hidden = false;
+        if (changed) section.querySelector('[data-git-selected-content]').textContent = 'Loading selected commit…';
         section.setAttribute('aria-busy', 'true');
         try {
             const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', signal: controller.signal});
@@ -122,7 +124,7 @@
             if (!parsed) throw new Error('Commit details could not be read.');
             section.querySelector('[data-git-selected-content]').replaceChildren(parsed);
             restore(section, saved, false);
-            if (moveFocus) { section.querySelector('h3').focus({preventScroll: true}); section.scrollIntoView({block: 'nearest'}); }
+            if (moveFocus && visible(node)) { section.querySelector('h3').focus({preventScroll: true}); section.scrollIntoView({block: 'nearest'}); }
         } catch (error) {
             if (error.name !== 'AbortError') failure(node, error.message || 'Commit details could not be read.');
         } finally { section.removeAttribute('aria-busy'); }
@@ -164,9 +166,16 @@
         if (event.target.closest('[data-graph-fit]') && svg) svg.setAttribute('viewBox', `0 0 ${svg.dataset.graphWidth} ${svg.dataset.graphHeight}`);
         const commit = event.target.closest('[data-git-commit]');
         if (commit && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); if (!stateFor('git', node).dragged) loadCommit(node, commit.dataset.gitCommit); }
-        if (event.target.closest('[data-git-close]')) { node.querySelector('[data-git-selection]').hidden = true; const state = stateFor('git', node); state.selected = null; state.commitController?.abort(); }
+        if (event.target.closest('[data-git-close]')) {
+            const state = stateFor('git', node);
+            const source = state.selected && node.querySelector(`[data-git-commit="${CSS.escape(state.selected)}"]`);
+            node.querySelector('[data-git-selection]').hidden = true;
+            state.selected = null;
+            state.commitController?.abort();
+            (source || node.querySelector('.git-graph-viewport'))?.focus({preventScroll: true});
+        }
         const task = event.target.closest('[data-inspect-task]');
-        if (task && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && window.StatecanInspector) {
+        if (task && !event.defaultPrevented && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && window.StatecanInspector) {
             event.preventDefault();
             document.dispatchEvent(new CustomEvent('statecan:inspect-task', {detail: {taskId: task.dataset.inspectTask, projectId: task.dataset.projectId}}));
         }

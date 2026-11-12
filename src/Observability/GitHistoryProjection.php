@@ -17,7 +17,7 @@ final readonly class GitHistoryProjection
     {
     }
 
-    public function git(GitHistoryQuery $filter): array
+    public function git(GitHistoryQuery $filter, ?string $commitSha = null): array
     {
         $project = $this->project($filter->project);
         $repositories = $this->db->fetchAllAssociative('SELECT id, observed_at FROM git_repository WHERE project_id = ? ORDER BY id LIMIT 100', [$project]);
@@ -44,6 +44,10 @@ final readonly class GitHistoryProjection
             $condition .= ' AND e.sha IN (SELECT sha FROM ancestry LIMIT 5000)';
         }
         $parameters[] = $repositoryId;
+        if (null !== $commitSha) {
+            $condition .= " AND e.sha = ? AND e.kind IN ('commit', 'merge')";
+            $parameters[] = $commitSha;
+        }
         if ('' !== trim($filter->q)) {
             $condition .= " AND strpos(lower(concat_ws(' ', e.sha, e.metadata->>'message', e.metadata->>'author', e.metadata->>'ref')), lower(?)) > 0";
             $parameters[] = trim($filter->q);
@@ -69,7 +73,7 @@ final readonly class GitHistoryProjection
             $event['associations'] = array_values(array_filter($associations, static fn (array $a): bool => $a['sha'] === $event['sha']));
         }
         unset($event);
-        $graphRows = $this->db->fetchAllAssociative($prefix."SELECT e.sha, e.metadata->'parents' AS parents, left(e.metadata->>'message', 160) AS message FROM git_event e WHERE ".$condition." AND e.kind IN ('commit', 'merge') ORDER BY e.observed_at DESC, e.id DESC LIMIT 50", $parameters);
+        $graphRows = null !== $commitSha ? [] : $this->db->fetchAllAssociative($prefix."SELECT e.sha, e.metadata->'parents' AS parents, left(e.metadata->>'message', 160) AS message FROM git_event e WHERE ".$condition." AND e.kind IN ('commit', 'merge') ORDER BY e.observed_at DESC, e.id DESC LIMIT 50", $parameters);
         $nodes = [];
         $lines = ['graph LR'];
         foreach ($graphRows as $row) {
