@@ -1,0 +1,77 @@
+{% set data = runtime|default(snapshot|default({})) %}
+{% set health = data.health|default({}) %}
+{% set queues = data.queues|default([]) %}
+{% set workers = data.workers|default([]) %}
+{% set jobs = data.jobs|default([]) %}
+{% set missing = health.missing_worker_queues|default([]) %}
+<section id="runtime-panel" class="runtime-console" data-console-component="runtime" data-component-url="{{ path('app_console_runtime') }}" data-runtime-fragment="{{ path('app_console_runtime') }}" data-runtime-loaded="{{ data.outbox is defined ? 'true' : 'false' }}" data-login-url="{{ path('app_login') }}" aria-labelledby="runtime-title">
+    <header class="runtime-toolbar">
+        <div><h2 id="runtime-title">Runtime supervision</h2><p>All projects · persisted worker, queue and job observations</p></div>
+        <button type="button" id="runtime-refresh" data-runtime-refresh>Refresh runtime</button>
+    </header>
+    <p id="runtime-refresh-status" class="runtime-freshness" role="status" aria-live="polite">{% if data.observed_at is defined %}Observed <time datetime="{{ data.observed_at|date('c', 'UTC') }}">{{ data.observed_at|date('H:i:s', 'UTC') }} UTC</time>{% else %}Server snapshot · refresh for latest event references{% endif %}</p>
+    <p id="runtime-error" class="runtime-notice runtime-danger" role="alert" hidden></p>
+    <a id="runtime-sign-in" href="{{ path('app_login') }}" hidden>Sign in again</a>
+    <div class="runtime-health runtime-notice {{ health.status|default('unknown') == 'ok' ? '' : 'runtime-warning' }}">
+        <strong>{{ health.status|default('unknown') == 'ok' ? 'No monitored runtime issues' : (health.status|default('unknown') == 'degraded' ? 'Runtime needs attention' : 'Runtime health unknown') }}</strong>
+        <span>Database: {{ health.database|default('unknown') }}. Event connection status is shown separately in the console header; it does not prove this data is fresh.</span>
+    </div>
+    <dl class="runtime-metrics">
+        <div><dt>Fresh queue coverage</dt><dd>{{ health.missing_worker_queues is defined ? (5 - missing|length) ~ ' / 5' : 'Unknown' }}</dd></div>
+        <div><dt>Failed jobs</dt><dd>{{ health.failed_jobs|default('Unknown') }}</dd></div>
+        <div><dt>Dead letters</dt><dd>{{ health.dead_letters|default('Unknown') }}</dd></div>
+        <div><dt>Pending outbox events</dt><dd>{{ health.pending_outbox|default('Unknown') }}</dd></div>
+    </dl>
+    {% if missing is not empty %}<p class="runtime-notice runtime-warning"><strong>No fresh worker coverage:</strong> {{ missing|join(', ') }}. Missing or expired heartbeat observations do not prove a process has stopped.</p>{% endif %}
+    {% if health.stalled_jobs|default(0) > 0 %}<p class="runtime-notice runtime-danger">{{ health.stalled_jobs }} processing job(s) exceed a monitored liveness or runtime threshold. Inspect their stall reasons below.</p>{% endif %}
+    <section class="runtime-section" aria-labelledby="runtime-queues-title">
+        <div class="runtime-section-heading"><h3 id="runtime-queues-title">Queues</h3><span>Depth includes delayed and in-flight messages</span></div>
+        <div class="runtime-queue-grid">
+        {% for queue in queues %}
+            <article class="runtime-queue {{ queue.backlog_stalled|default(false) ? 'runtime-overdue' : '' }}" data-entity-type="queue" data-entity-id="{{ queue.queue }}">
+                <div class="runtime-row-heading"><h4>{{ queue.queue|replace({'_':' '}) }}</h4><span class="runtime-badge {{ queue.queue == 'failed' or queue.backlog_stalled|default(false) ? 'runtime-badge-warning' : '' }}">{{ queue.queue == 'failed' ? 'Failure transport' : (queue.backlog_stalled|default(false) ? 'Backlog overdue' : (queue.live_workers|default(0) > 0 ? 'Covered' : 'No fresh coverage')) }}</span></div>
+                <dl class="runtime-queue-stats"><div><dt>Depth</dt><dd>{{ queue.depth }}</dd></div><div><dt>Ready</dt><dd>{{ queue.ready|default('Unknown') }}</dd></div><div><dt>In flight</dt><dd>{{ queue.in_flight }}</dd></div><div><dt>Oldest age</dt><dd>{{ queue.oldest_age_seconds is defined and queue.oldest_age_seconds is not null ? queue.oldest_age_seconds|number_format(0) ~ 's' : '—' }}</dd></div></dl>
+                <p>{{ queue.queue == 'failed' ? 'Held for operator inspection; not consumed by normal workers.' : queue.live_workers|default(0) ~ ' fresh worker(s) · oldest ready: ' ~ (queue.oldest_ready_seconds|default(null) is not null ? queue.oldest_ready_seconds|number_format(0) ~ 's' : '—') }}</p>
+            </article>
+        {% else %}<p class="runtime-empty">Queue observations are unavailable. Refresh runtime to retry.</p>{% endfor %}
+        </div>
+    </section>
+    <section class="runtime-section" aria-labelledby="runtime-workers-title">
+        <div class="runtime-section-heading"><h3 id="runtime-workers-title">Worker processes</h3><span>Latest {{ workers|length }} observations · up to 50 after refresh</span></div>
+        <p class="runtime-explanation">Fresh heartbeat ≤ {{ health.worker_ttl_seconds|default('unknown') }}s. A responsive worker may still be stalled; handled counts and last progress are separate observations.</p>
+        <div class="runtime-list" id="runtime-worker-list" tabindex="0" aria-label="Worker process observations">
+        {% for worker in workers %}
+            <details data-runtime-detail="worker-{{ worker.id }}" data-entity-type="worker" data-entity-id="{{ worker.id }}">
+                <summary><span class="runtime-summary-text">{{ worker.transports|join(', ') }}</span><span class="runtime-badge {{ worker.liveness in ['stale','stopped'] ? 'runtime-badge-warning' : '' }}">{{ {idle:'Fresh · idle',busy:'Fresh · busy',stale:'Heartbeat overdue',stopped:'Reported stopped'}[worker.liveness]|default('Unknown liveness') }}</span><span class="runtime-summary-meta">{{ worker.heartbeat_age_seconds|number_format(0) }}s since heartbeat</span></summary>
+                <dl class="runtime-fields"><div><dt>Worker ID</dt><dd><code>{{ worker.id }}</code></dd></div><div><dt>Host / process</dt><dd>{{ worker.hostname }} / {{ worker.pid }}</dd></div><div><dt>Last heartbeat</dt><dd>{{ worker.last_seen_at }} UTC</dd></div><div><dt>Last progress</dt><dd>{{ worker.last_progress_at }} UTC</dd></div><div><dt>Current job</dt><dd>{{ worker.current_job_id|default('None reported') }}</dd></div><div><dt>Handled count</dt><dd>{{ worker.handled_count }}</dd></div><div><dt>Stopped at</dt><dd>{{ worker.stopped_at|default('Not reported') }}</dd></div></dl>
+            </details>
+        {% else %}<p class="runtime-empty">No worker heartbeats recorded in this bounded view. Process liveness is unknown; do not infer that workers are running or stopped.</p>{% endfor %}
+        </div>
+    </section>
+    <section class="runtime-section" aria-labelledby="runtime-jobs-title">
+        <div class="runtime-section-heading"><h3 id="runtime-jobs-title">Background jobs</h3><label for="runtime-job-filter">Show <select id="runtime-job-filter"><option value="all">All recent jobs</option><option value="attention">Failures and stalled</option><option value="retrying">Retrying</option><option value="dead_letter">Dead letters</option><option value="processing">Processing</option><option value="completed">Completed</option></select></label></div>
+        <p class="runtime-explanation">Latest {{ jobs|length }} jobs · up to 50 after refresh. Filters apply to this bounded list, not the entire job history. Latency is elapsed time from enqueue to finish or now.</p>
+        <div class="runtime-list" id="runtime-job-list" tabindex="0" aria-label="Recent background jobs">
+        {% for job in jobs %}
+            <details data-runtime-detail="job-{{ job.id }}" data-runtime-job data-job-status="{{ job.status }}" data-job-stalled="{{ job.stall_reason|default(null) ? 'true' : 'false' }}" data-entity-type="job" data-entity-id="{{ job.id }}">
+                <summary><span class="runtime-summary-text">{{ job.message_type|split('\\')|last }}</span><span class="runtime-badge {{ job.status in ['failed','dead_letter'] or job.stall_reason|default(null) ? 'runtime-badge-warning' : '' }}">{{ job.status|replace({'_':' '}) }}</span><span class="runtime-summary-meta">{{ job.attempts }} attempt(s) · {{ job.latency_seconds|number_format(0) }}s</span></summary>
+                <dl class="runtime-fields"><div><dt>Job ID</dt><dd><code>{{ job.id }}</code></dd></div><div><dt>Queue</dt><dd>{{ job.queue_name|default('Not recorded') }}</dd></div><div><dt>Correlation ID</dt><dd><code>{{ job.correlation_id }}</code></dd></div><div><dt>Worker</dt><dd>{{ job.worker_id|default('Not recorded') }}</dd></div><div><dt>Enqueued</dt><dd>{{ job.created_at }}</dd></div><div><dt>Started</dt><dd>{{ job.started_at|default('Not started') }}</dd></div><div><dt>Finished</dt><dd>{{ job.finished_at|default('Not finished') }}</dd></div><div><dt>Stall reason</dt><dd>{{ job.stall_reason|default('None detected')|replace({'_':' '}) }}</dd></div></dl>
+                {% if job.error %}<div class="runtime-failure"><h4>Recorded error</h4><pre>{{ job.error }}</pre></div>{% endif %}
+                {% if job.status == 'retrying' %}<p class="runtime-explanation">Retry scheduled by Messenger. Exact retry time is not exposed by this observation.</p>{% elseif job.status == 'dead_letter' %}<p class="runtime-explanation">Retry handling exhausted or failed permanently. Authorized operators can inspect the failure transport with the deployment's Messenger tools.</p>{% endif %}
+            </details>
+        {% else %}<p class="runtime-empty">No background jobs recorded in this bounded view.</p>{% endfor %}
+        </div>
+        <p id="runtime-no-job-matches" class="runtime-empty" hidden>No jobs match this filter in the current bounded list.</p>
+        <p class="runtime-explanation">Retry policy: up to five retries, exponential backoff with jitter, maximum delay 60s. This console does not retry or discard messages.</p>
+    </section>
+    <section class="runtime-section" aria-labelledby="runtime-outbox-title">
+        <div class="runtime-section-heading"><h3 id="runtime-outbox-title">Transactional outbox</h3><span class="runtime-badge {{ health.outbox_stalled|default(false) ? 'runtime-badge-warning' : '' }}">{{ health.outbox_stalled|default(false) ? 'Dispatch overdue' : 'Pending: ' ~ health.pending_outbox|default('unknown') }}</span></div>
+        <p class="runtime-explanation">Oldest pending event: {{ health.oldest_pending_outbox_seconds|default(null) is not null ? health.oldest_pending_outbox_seconds|number_format(0) ~ 's' : 'none observed' }}. Published means durably queued, not completed by a worker.</p>
+        <div class="runtime-list" id="runtime-outbox-list" tabindex="0" aria-label="Recent outbox event references">
+        {% for event in data.outbox|default([]) %}
+            <details data-runtime-detail="outbox-{{ event.id }}" data-entity-type="outbox" data-entity-id="{{ event.id }}"><summary><span class="runtime-summary-text">{{ event.type }}</span><span class="runtime-badge">{{ event.published_at ? 'Published to queue' : 'Pending dispatch' }}</span></summary><dl class="runtime-fields"><div><dt>Event ID</dt><dd><code>{{ event.id }}</code></dd></div><div><dt>Aggregate reference</dt><dd><code>{{ event.aggregate_id }}</code></dd></div><div><dt>Created</dt><dd>{{ event.created_at }} UTC</dd></div><div><dt>Published</dt><dd>{{ event.published_at|default('Not published') }}</dd></div></dl></details>
+        {% else %}<p class="runtime-empty">{{ data.outbox is defined ? 'No outbox events recorded.' : 'Refresh runtime to load recent event references.' }}</p>{% endfor %}
+        </div><p class="runtime-explanation">Latest {{ data.outbox|default([])|length }} event references · maximum 25. Event payloads and queue message bodies are not loaded.</p>
+    </section>
+    <details class="runtime-raw" data-runtime-detail="raw-health"><summary>Raw health observation</summary><pre>{{ health|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre></details>
+</section>
