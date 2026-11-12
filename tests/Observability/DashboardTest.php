@@ -41,7 +41,7 @@ final class DashboardTest extends WebTestCase
         $client->request('GET', '/dashboard?'.$query);
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('#task-inspector', 'Inspect real task');
-        self::assertSelectorExists('#task-inspector svg');
+        self::assertSelectorExists('#task-inspector [data-inspector-section="git"]');
         $client->request('GET', '/api/v1/observability/snapshot?'.$query);
         self::assertResponseIsSuccessful();
         $snapshot = json_decode($client->getResponse()->getContent(), true, flags: JSON_THROW_ON_ERROR);
@@ -60,9 +60,9 @@ final class DashboardTest extends WebTestCase
         self::assertResponseHeaderSame('content-type', 'text/event-stream; charset=UTF-8');
         $events = $client->getInternalResponse()->getContent();
         self::assertStringContainsString('event: refresh', $events);
-        $client->request('GET', '/dashboard/fragment?'.$query);
+        $client->request('GET', '/dashboard/tasks/'.$task->getId().'/inspector?project='.$project->getId());
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('#task-inspector', 'ready');
-        self::assertSelectorTextContains('#task-inspector', 'version 2');
+        self::assertSelectorTextContains('.inspector-heading', 'ready');
+        self::assertSelectorTextContains('.inspector-heading', 'Task v2');
     }
 }

@@ -6,6 +6,8 @@ use App\Observability\ActivityStream;
 use App\Observability\ComponentProjection;
 use App\Observability\DashboardProjection;
 use App\Observability\ObservationFilter;
+use App\Observability\TaskInspectorProjection;
+use App\Dto\Observability\TaskInspectorQuery;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\EventStreamResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -19,9 +21,12 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 final class ObservabilityController extends AbstractController
 {
     #[Route('/dashboard', name: 'app_dashboard', methods: ['GET'])]
-    public function dashboard(#[MapQueryString] ObservationFilter $filter, DashboardProjection $projection): Response
+    public function dashboard(#[MapQueryString] ObservationFilter $filter, DashboardProjection $projection, TaskInspectorProjection $inspector): Response
     {
-        return $this->render('observability/dashboard.html.twig', ['snapshot' => $projection->snapshot($filter)], new Response(headers: ['Cache-Control' => 'private, no-store']));
+        return $this->render('observability/dashboard.html.twig', [
+            'snapshot' => $projection->snapshot($filter),
+            'initial_inspector' => null === $filter->task ? null : $inspector->read($filter->task, new TaskInspectorQuery(project: $filter->project, page: $filter->page)),
+        ], new Response(headers: ['Cache-Control' => 'private, no-store']));
     }
 
     #[Route('/dashboard/fragment', name: 'app_dashboard_fragment', methods: ['GET'])]

@@ -13,15 +13,11 @@
 {% include 'observability/_work.html.twig' %}
 </section>
 <section id="view-git" data-console-view="git" aria-label="Git" hidden>
-<section><h2>Git activity ledger and graphs</h2>{% for repository in snapshot.repositories %}<details open><summary>Repository {{ repository.id }} · observed {{ repository.observed_at|default('not yet') }}</summary><h3>Observed refs</h3><pre>{{ repository.refs }}</pre><h3>Ledger</h3><pre>{{ repository.events|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Commit graph · Mermaid source</h3>{{ ui.diagram(repository.diagram, repository.id) }}<pre>{{ repository.graph is iterable ? repository.graph|json_encode(constant('JSON_PRETTY_PRINT')) : repository.graph }}</pre></details>{% else %}<p class="muted">No registered repositories.</p>{% endfor %}</section>
-<section class="panel"><h2>Dependency relationships</h2>{{ ui.diagram(snapshot.dependency_diagram, 'dependencies') }}<details><summary>Mermaid source and indexed relationships</summary><pre>{{ snapshot.dependency_graph }}</pre>{{ ui.table(snapshot.dependencies) }}</details></section>
+{% include 'observability/_git.html.twig' %}
 </section>
 <section id="view-history" data-console-view="history" aria-label="History" hidden>
-<section><h2>Agent sessions</h2>{{ ui.table(snapshot.sessions) }}<h3>Session activity timeline</h3>{{ ui.table(snapshot.session_timeline) }}</section>
-<section><h2>Historical receipts</h2><p class="muted">Pending attempts and verified evidence remain distinct. Hashes record integrity; storage policy provides immutability.</p>{{ ui.table(snapshot.receipts) }}{% for receipt in snapshot.receipts %}<p><a href="{{ path('api_observability_receipt', {id:receipt.id}) }}">Inspect canonical evidence · {{ receipt.id }}</a></p>{% endfor %}</section>
-<nav class="pagination" aria-label="History pages">{% if snapshot.page > 0 %}<a href="{{ path('app_dashboard', {project:snapshot.project, page:snapshot.page - 1}) }}#history">← Previous</a>{% endif %}<span>Page {{ snapshot.page + 1 }} · bounded histories</span><a href="{{ path('app_dashboard', {project:snapshot.project, page:snapshot.page + 1}) }}#history">Next histories →</a></nav>
+{% include 'observability/_history.html.twig' %}
 </section>
 <section id="view-runtime" data-console-view="runtime" aria-label="Runtime" hidden>
-<section><h2>Worker health</h2><pre>{{ snapshot.health|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Worker processes</h3><pre>{{ snapshot.workers|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Queues</h3><pre>{{ snapshot.queues|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre><h3>Background jobs</h3><pre>{{ snapshot.jobs|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre></section>
-
+{% include 'observability/_runtime.html.twig' %}
 </section>

@@ -1,7 +1,7 @@
 {% extends 'base.html.twig' %}
 {% block title %}Statecan · Operations console{% endblock %}
-{% block stylesheets %}<link rel="stylesheet" href="{{ app.request.basePath }}/observability.css">{% endblock %}
-{% block javascripts %}<script src="{{ app.request.basePath }}/observability.js" defer></script>{% endblock %}
+{% block stylesheets %}<link rel="stylesheet" href="{{ app.request.basePath }}/observability.css"><link rel="stylesheet" href="{{ app.request.basePath }}/console-inspector.css"><link rel="stylesheet" href="{{ app.request.basePath }}/console-runtime.css"><link rel="stylesheet" href="{{ app.request.basePath }}/console-git.css">{% endblock %}
+{% block javascripts %}<script src="{{ app.request.basePath }}/observability.js" defer></script><script src="{{ app.request.basePath }}/console-inspector.js" defer></script><script src="{{ app.request.basePath }}/console-runtime.js" defer></script><script src="{{ app.request.basePath }}/console-git.js" defer></script>{% endblock %}
 {% block body %}
 <a class="skip-link" href="#console-content">Skip to content</a>
 <header class="app-header">
@@ -16,11 +16,12 @@
         <a class="account-link" href="{{ path('app_home') }}">Account</a>
     </nav>
     <main id="console-content" tabindex="-1">
-        <div class="workspace-header"><div><span class="eyebrow">LIVE WORKSPACE</span><h1 id="view-heading">{{ snapshot.task ? 'Work' : 'Operations' }}</h1></div><button type="button" id="refresh-now">Refresh data</button></div>
+        <div class="workspace-header"><div><span class="eyebrow">LIVE WORKSPACE</span><h1 id="view-heading" tabindex="-1">{{ snapshot.task ? 'Work' : 'Operations' }}</h1></div><div class="workspace-actions"><a id="console-account" class="compact-account" href="{{ path('app_home') }}">Account</a><button type="button" id="refresh-now">Refresh data</button></div></div>
         <p id="console-error" class="notice danger" role="alert" hidden></p>
-        <div id="observability" data-events="{{ path('api_observability_events', app.request.query.all) }}" data-fragment="{{ path('app_dashboard_fragment', app.request.query.all) }}" data-initial-view="{{ snapshot.task ? 'work' : 'operations' }}">
+        <div id="observability" data-events="{{ path('api_observability_events', app.request.query.all) }}" data-fragment="{{ path('app_dashboard_fragment', app.request.query.all) }}" data-login-url="{{ path('app_login') }}" data-initial-view="{{ snapshot.task ? 'work' : 'operations' }}">
         {% include 'observability/_snapshot.html.twig' %}
         </div>
+        {% include 'observability/_inspector.html.twig' %}
     </main>
 </div>
 {% endblock %}

@@ -41,6 +41,8 @@ small { display: block; }
 .console-nav a:hover { background: #192435; text-decoration: none; }
 .console-nav .account-link { margin-top: auto; color: var(--muted); }
 main { width: 100%; min-width: 0; max-width: 1800px; padding: 1.2rem 1.5rem 2rem; margin: 0 auto; }
+.workspace-actions { display: flex; align-items: center; gap: .6rem; }
+.compact-account { display: none; }
 .workspace-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .eyebrow { font-size: .65rem; color: var(--muted); letter-spacing: .13em; display: block; margin-bottom: .3rem; }
 .project-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; padding: .65rem 0; border-top: 1px solid var(--line); margin-bottom: .8rem; }
@@ -113,7 +115,6 @@ td, th { padding: .55rem; text-align: left; border-bottom: 1px solid var(--line)
 details { padding: .7rem; border: 1px solid var(--line); border-radius: 5px; margin: .7rem 0; min-width: 0; }
 summary { cursor: pointer; }
 #task-inspector, [data-console-view] > section:not(.column):not(.operations-grid) { min-width: 0; }
-#task-inspector { padding: 1rem; border: 1px solid var(--line); border-radius: 6px; margin-top: 1rem; }
 #task-inspector h3 { margin-top: 1rem; }
 [data-console-view] > section > h2 { margin: .8rem 0; }
 @media (max-width: 1100px) {
@@ -121,6 +122,7 @@ summary { cursor: pointer; }
     .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 1024px) {
+    .compact-account { display: inline-flex; align-items: center; min-height: 36px; padding: .3rem; font-size: .8rem; }
     .console-shell { grid-template-columns: minmax(0, 1fr); }
     .console-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: .4rem .8rem; border-right: 0; border-bottom: 1px solid var(--line); }
     .console-nav a { text-align: center; padding: .65rem .2rem; }
@@ -149,7 +151,9 @@ summary { cursor: pointer; }
     .column-description { min-height: 0; }
     .console-nav { padding: .3rem .4rem; gap: .1rem; }
     .console-nav a { font-size: .8rem; }
-    .workspace-header { gap: .5rem; }
+    .workspace-actions { display: flex; align-items: center; gap: .6rem; }
+.compact-account { display: none; }
+.workspace-header { gap: .5rem; }
     .scope-note { font-size: .75rem; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
