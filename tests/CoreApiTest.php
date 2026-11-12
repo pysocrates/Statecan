@@ -16,6 +16,7 @@ final class CoreApiTest extends WebTestCase
         $user = new User();
         $user->setEmail('core-'.bin2hex(random_bytes(6)).'@example.com');
         $user->setPassword('test-only-unusable-password-hash');
+        $user->grantOperator();
         $project = new Project('API smoke project');
         $em->persist($user);
         $em->persist($project);
@@ -32,9 +33,15 @@ final class CoreApiTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $events = json_decode($client->getResponse()->getContent(), true, flags: JSON_THROW_ON_ERROR);
         self::assertSame('backlog', $events[0]['to']);
+        $client->jsonRequest('POST', '/api/v1/tasks/'.$taskId.'/transition', ['target' => 'ready', 'expectedVersion' => 1], ['HTTP_IDEMPOTENCY_KEY' => 'ready-'.$taskId]);
+        self::assertResponseIsSuccessful();
+        $transitioned = json_decode($client->getResponse()->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertSame('ready', $transitioned['status']);
+        self::assertSame(2, $transitioned['version']);
         // Remove only this test's data; production deletion remains archival.
         $connection = self::getContainer()->get(EntityManagerInterface::class)->getConnection();
         $connection->executeStatement('DELETE FROM outbox_event WHERE aggregate_id = ?', [$taskId]);
+        $connection->executeStatement('DELETE FROM api_mutation WHERE id = ?', [hash('sha256', $user->getEmail().'|ready-'.$taskId)]);
         $connection->executeStatement('DELETE FROM state_event WHERE task_id = ?', [$taskId]);
         $connection->executeStatement('DELETE FROM task_contract WHERE task_id = ?', [$taskId]);
         $connection->executeStatement('DELETE FROM task WHERE id = ?', [$taskId]);
