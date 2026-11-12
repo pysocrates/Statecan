@@ -85,7 +85,7 @@
         node.setAttribute('aria-busy', 'true');
         node.querySelector('[data-review-status]').textContent = 'Reading authoritative records…';
         try {
-            const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', signal: controller.signal});
+            const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', headers: {'X-Requested-With': 'XMLHttpRequest'}, signal: controller.signal});
             if ([401, 403].includes(response.status) || response.redirected) { sessionLost(); return; }
             if (!response.ok || !response.headers.get('content-type')?.includes('text/html')) throw new Error('Records could not be read. Previous data is retained; use Refresh to retry.');
             const html = await response.text();
@@ -133,7 +133,7 @@
         if (changed) section.querySelector('[data-git-selected-content]').textContent = 'Loading selected commit…';
         section.setAttribute('aria-busy', 'true');
         try {
-            const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', signal: controller.signal});
+            const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', headers: {'X-Requested-With': 'XMLHttpRequest'}, signal: controller.signal});
             if ([401, 403].includes(response.status) || response.redirected) { sessionLost(); return; }
             if (!response.ok) throw new Error('Commit details are unavailable. Select the commit again to retry.');
             const html = await response.text();
