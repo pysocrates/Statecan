@@ -25,7 +25,11 @@
         expired = true;
         request?.abort();
         clearTimeout(timer);
-        error.textContent = 'Your session expired or operator access changed. Sign in again from Account.';
+        error.textContent = 'Your session expired or operator access changed. ';
+        const login = document.createElement('a');
+        login.href = panel.dataset.loginUrl;
+        login.textContent = 'Sign in again';
+        error.append(login);
         error.hidden = false;
         retry.hidden = true;
         document.dispatchEvent(new CustomEvent('statecan:session-expired'));
@@ -43,9 +47,10 @@
         const controller = new AbortController();
         request = controller;
         const current = ++sequence;
-        const state = capture();
+        let state = capture();
         content.setAttribute('aria-busy', 'true');
-        loading.hidden = content.childElementCount > 0;
+        loading.textContent = content.childElementCount ? 'Refreshing task details…' : 'Loading task…';
+        loading.hidden = false;
         retry.hidden = true;
         const url = new URL(panel.dataset.endpointTemplate.replace('__TASK__', selected), location.origin);
         if (project) url.searchParams.set('project', project);
@@ -59,13 +64,14 @@
             const html = await response.text();
             if (current !== sequence || expired || panel.hidden) return;
             // This feature-owned content is server-escaped Twig, fetched from the authorized focused endpoint.
+            state = capture();
             content.innerHTML = html;
             content.querySelectorAll('details[data-inspector-section]').forEach(item => {
                 if (state.details.has(item.dataset.inspectorSection)) item.open = state.details.get(item.dataset.inspectorSection);
             });
             error.hidden = true;
             if (focus) document.getElementById('inspector-title')?.focus({preventScroll: true});
-            else if (state.focus) document.getElementById(state.focus)?.focus({preventScroll: true});
+            else if (state.focus) (document.getElementById(state.focus) || document.getElementById('inspector-pagination'))?.focus({preventScroll: true});
             panel.scrollTop = focus ? 0 : state.scroll;
         } catch (failure) {
             if (failure.name === 'AbortError' || current !== sequence) return;
@@ -103,11 +109,15 @@
         clearTimeout(timer);
         panel.hidden = true;
         panel.dataset.taskId = '';
+        const closedTask = selected;
         selected = project = null;
         saveLocation();
         selection();
         if (source?.isConnected) source.focus({preventScroll: true});
-        else document.getElementById('view-heading')?.focus({preventScroll: true});
+        else {
+            const replacement = [...document.querySelectorAll('#observability a[href]')].find(link => new URL(link.href, location.href).searchParams.get('task') === closedTask);
+            (replacement || document.getElementById('console-content'))?.focus({preventScroll: true});
+        }
     }
     closeButton.addEventListener('click', close);
     retry.addEventListener('click', () => refresh());
@@ -139,8 +149,10 @@
         if (!selected || panel.hidden || expired) return;
         const detail = event.detail || {};
         const owner = content.querySelector('[data-session-id]');
-        const relevant = detail.reconcile || (detail.entities || []).some(entity =>
-            (entity.type === 'task' && entity.id === selected) || entity.taskId === selected ||
+        const related = new Set([...content.querySelectorAll('[data-related-task]')].map(link => link.dataset.relatedTask));
+        const relevant = detail.reconcile || ((detail.components || []).includes('inspector') && !(detail.entities || []).length) || (detail.entities || []).some(entity =>
+            (entity.type === 'task' && (entity.id === selected || related.has(entity.id))) || entity.taskId === selected ||
+            (entity.type === 'project' && entity.id === project) ||
             (entity.type === 'session' && entity.id === owner?.dataset.sessionId) ||
             (entity.type === 'agent' && entity.id === owner?.dataset.agentId)
         );
