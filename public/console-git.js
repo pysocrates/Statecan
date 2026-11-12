@@ -48,7 +48,14 @@
         if (live) saved.values.forEach(([name, value]) => { const field = node.querySelector(`[data-review-form] [name="${CSS.escape(name)}"]`); if (field) field.value = value; });
         if (live && saved.graph) node.querySelector('[data-git-graph]')?.setAttribute('viewBox', saved.graph);
         const focus = saved.focus && node.querySelector(saved.focus);
-        if (focus) { focus.focus({preventScroll: true}); if (saved.range) focus.setSelectionRange?.(...saved.range); }
+        if (focus && !focus.disabled) {
+            focus.focus({preventScroll: true});
+            if (saved.range) focus.setSelectionRange?.(...saved.range);
+        } else if (saved.focus) {
+            const status = node.querySelector('[data-review-status]');
+            status?.setAttribute('tabindex', '-1');
+            status?.focus({preventScroll: true});
+        }
     }
     function requestRefresh(name, options = {}) {
         const node = panel(name);

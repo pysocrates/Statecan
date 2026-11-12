@@ -90,8 +90,19 @@ final readonly class GitHistoryProjection
             }
         }
         $mermaid = implode("\n", $lines);
+        $graph = $this->graphs->layout($mermaid);
+        // Fit small histories without enlarging a single commit into a full-width card.
+        $dx = max(0, (760 - $graph['width']) / 2);
+        $dy = max(0, (280 - $graph['height']) / 2);
+        foreach ($graph['nodes'] as &$node) {
+            $node['x'] += $dx;
+            $node['y'] += $dy;
+        }
+        unset($node);
+        $graph['width'] = max(760, $graph['width']);
+        $graph['height'] = max(280, $graph['height']);
 
-        return ['project' => $project, 'repositories' => $repositories, 'repository' => $repository, 'events' => $events, 'graph' => $this->graphs->layout($mermaid), 'mermaid' => $mermaid, 'page' => $filter->page, 'has_next' => $hasNext, 'page_size' => self::PAGE_SIZE, 'filter' => $filter, 'graph_limit' => self::GRAPH_LIMIT];
+        return ['project' => $project, 'repositories' => $repositories, 'repository' => $repository, 'events' => $events, 'graph' => $graph, 'mermaid' => $mermaid, 'page' => $filter->page, 'has_next' => $hasNext, 'page_size' => self::PAGE_SIZE, 'filter' => $filter, 'graph_limit' => self::GRAPH_LIMIT];
     }
 
     public function history(GitHistoryQuery $filter): array
