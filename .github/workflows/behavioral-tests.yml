@@ -83,6 +83,9 @@ jobs:
         if: matrix.suite == 'browser'
         env:
           PANTHER_CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+          # Chrome for Testing runs outside Ubuntu's packaged-browser AppArmor profile.
+          # Limit the sandbox override to this disposable CI browser process.
+          PANTHER_NO_SANDBOX: '1'
           PANTHER_CHROME_ARGUMENTS: --disable-dev-shm-usage
         run: php bin/phpunit --group browser --fail-on-empty-test-suite --log-junit var/test-results/browser.xml
 
