@@ -240,6 +240,17 @@ Receipt storage must support atomic hard links and `fsync`. Back up both Postgre
 
 ## Tests and verification
 
+GitHub Actions runs the existing behavioral suites on pushes, pull requests, and
+manual dispatches via [Behavioral tests](.github/workflows/behavioral-tests.yml).
+Separate backend and browser jobs each use PHP 8.5 and a fresh PostgreSQL 18 test
+database migrated from scratch. The backend job covers API/domain behavior,
+leases, receipts, Git indexing, and worker recovery; the browser job runs all
+Panther acceptance tests with Chrome and a matching ChromeDriver, including
+navigation, live updates, task inspection, and session/network recovery.
+Both jobs upload JUnit reports, available test logs, and browser screenshots or
+observations as seven-day artifacts, including on failure. No repository secrets
+or external application server are required.
+
 Use a dedicated PostgreSQL test database. Symfony adds `_test` to the configured database name; `.env.test.local` can provide a separate base connection. Never point tests at a production database.
 
 ```bash

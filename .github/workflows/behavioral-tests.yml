@@ -1,0 +1,103 @@
+name: Behavioral tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: behavioral-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  behavior:
+    name: ${{ matrix.suite }} behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [backend, browser]
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: statecan
+          POSTGRES_PASSWORD: statecan_ci
+          POSTGRES_DB: statecan_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U statecan -d statecan_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      APP_ENV: test
+      APP_SECRET: statecan-ci-test-secret
+      # Doctrine appends _test in the test environment.
+      DATABASE_URL: postgresql://statecan:statecan_ci@127.0.0.1:5432/statecan?serverVersion=18&charset=utf8
+      PANTHER_APP_ENV: test
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: ctype, curl, dom, iconv, mbstring, pdo_pgsql, pcntl, xml, xmlwriter
+          tools: composer:v2
+          coverage: none
+
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Migrate the test database
+        run: php bin/console doctrine:migrations:migrate --no-interaction
+
+      - name: Validate the test schema
+        run: php bin/console doctrine:schema:validate
+
+      - name: Set up Chrome and matching ChromeDriver
+        if: matrix.suite == 'browser'
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+          install-chromedriver: true
+          install-dependencies: true
+
+      - name: Run API, domain, and runtime behavior tests
+        if: matrix.suite == 'backend'
+        run: php bin/phpunit --exclude-group browser --fail-on-empty-test-suite --log-junit var/test-results/backend.xml
+
+      - name: Run browser acceptance tests
+        if: matrix.suite == 'browser'
+        env:
+          PANTHER_CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+          # Chrome for Testing runs outside Ubuntu's packaged-browser AppArmor profile.
+          # Limit the sandbox override to this disposable CI browser process.
+          PANTHER_NO_SANDBOX: '1'
+          PANTHER_CHROME_ARGUMENTS: --disable-dev-shm-usage
+        run: php bin/phpunit --group browser --fail-on-empty-test-suite --log-junit var/test-results/browser.xml
+
+      - name: Upload test reports and browser observations
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: behavior-${{ matrix.suite }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            var/test-results/
+            var/error-screenshots/
+            var/console-qa/
+            var/log/test.log
